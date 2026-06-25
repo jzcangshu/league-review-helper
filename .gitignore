@@ -1,4 +1,18 @@
 # Real review materials: keep these out of public repositories.
+# The repository uses a top-level allow-list so accidental school folders are ignored by default.
+/*
+!/.gitattributes
+!/.gitignore
+!/LICENSE
+!/README.md
+!/start-review.cmd
+!/start-review.ps1
+!/注意事项.txt
+!/codex-skills/
+!/examples/
+!/review-web/
+!/审核结果/
+
 审核结果/*
 !审核结果/示例中学/
 !审核结果/示例中学/**
