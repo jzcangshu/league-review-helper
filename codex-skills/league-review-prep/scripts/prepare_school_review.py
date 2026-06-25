@@ -299,7 +299,6 @@ def main() -> int:
     parser.add_argument("--excel", help="explicit roster Excel path")
     parser.add_argument("--pdf-dir", help="explicit PDF folder")
     parser.add_argument("--review-root", default="审核结果", help="review result root folder")
-    parser.add_argument("--make-sidecars", action="store_true", help="create empty TXT sidecars next to PDFs")
     parser.add_argument("--update-web-sources", action="store_true", help="register folder in review-web/sources.json")
     parser.add_argument("--write-excel", action="store_true", help="write completed review TXT results into the roster Excel")
     parser.add_argument("--alias", action="append", default=[], help="confirmed name mapping, format: Excel姓名=审核结果姓名")
@@ -326,9 +325,11 @@ def main() -> int:
         print(f"- 写入非空审核结果: {write_report['written']}；写入空结果: {write_report['blank']}")
         print(f"- 无资料红字标记: {len(write_report['missing'])}")
         alias_used = write_report["alias_used"]
+        fuzzy_used = write_report["fuzzy_used"]
+        mismatch_used = [*alias_used, *fuzzy_used]
+        print("- 姓名字形不一致写入: " + ("、".join(f"{left}←{right}" for left, right in mismatch_used) if mismatch_used else "无"))
         if alias_used:
             print("- 使用确认别名: " + "、".join(f"{left}←{right}" for left, right in alias_used))
-        fuzzy_used = write_report["fuzzy_used"]
         if fuzzy_used:
             print("- 高置信模糊写入: " + "、".join(f"{left}←{right}" for left, right in fuzzy_used))
         ambiguous = write_report["ambiguous"]
@@ -348,9 +349,6 @@ def main() -> int:
 
     created_reviews = 0
     existing_reviews = 0
-    created_sidecars = 0
-    existing_sidecars = 0
-
     for pdf_path, student_name in zip(pdf_files, pdf_names):
         if not student_name:
             continue
@@ -359,13 +357,6 @@ def main() -> int:
             created_reviews += 1
         else:
             existing_reviews += 1
-
-        if args.make_sidecars:
-            sidecar_path = pdf_path.with_suffix(".txt")
-            if ensure_empty_file(sidecar_path):
-                created_sidecars += 1
-            else:
-                existing_sidecars += 1
 
     if args.update_web_sources:
         update_web_sources(workspace, school, pdf_dir)
@@ -382,8 +373,6 @@ def main() -> int:
     print(f"- 审核结果目录: {review_dir.relative_to(workspace)}")
     print(f"- 名单人数: {len(roster.names)}；PDF人数: {len(pdf_names)}")
     print(f"- 新建审核结果TXT: {created_reviews}；已有: {existing_reviews}")
-    if args.make_sidecars:
-        print(f"- 新建PDF同名TXT: {created_sidecars}；已有: {existing_sidecars}")
     if args.update_web_sources:
         print("- review-web导入配置: 已更新")
     print()

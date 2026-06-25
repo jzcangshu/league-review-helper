@@ -218,9 +218,7 @@ async function ensureReviewFilesForSource(source) {
       existing += 1;
       continue;
     }
-    const sidecarPath = path.join(path.dirname(pdfPath), `${stripExtension(pdfPath)}.txt`);
-    const initialContent = fs.existsSync(sidecarPath) ? await fsp.readFile(sidecarPath, "utf8") : "";
-    await fsp.writeFile(reviewPath, initialContent, "utf8");
+    await fsp.writeFile(reviewPath, "", "utf8");
     created += 1;
   }
 
@@ -289,7 +287,6 @@ async function discoverSourceFolders() {
 
     const entries = await fsp.readdir(currentPath, { withFileTypes: true }).catch(() => []);
     const pdfCount = entries.filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".pdf")).length;
-    const txtCount = entries.filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".txt")).length;
     if (pdfCount > 0) {
       const relativePath = path.relative(workspaceRoot, currentPath);
       const firstSegment = relativePath.split(path.sep)[0];
@@ -297,7 +294,6 @@ async function discoverSourceFolders() {
         folderRelativePath: relativePath,
         suggestedSchool: firstSegment || path.basename(currentPath),
         pdfCount,
-        txtCount,
         imported: imported.has(relativePath.toLowerCase())
       });
     }

@@ -1,6 +1,6 @@
 ---
 name: league-review-prep
-description: Prepare new schools for youth league application review and finish completed-school exports. Use when Codex needs to onboard a new school, create empty audit-result TXT files from PDF filenames, compare Excel roster names against PDF files, report missing or suspicious names, create sidecar TXT files for a PDF+TXT review folder, register the folder for the local review-web app, or write a completed school's TXT audit results back into the roster Excel with missing materials marked in red.
+description: Prepare new schools for youth league application review and finish completed-school exports. Use when Codex needs to onboard a new school, create empty audit-result TXT files under the review-result root from PDF filenames, compare Excel roster names against PDF files, report missing or suspicious names, register the PDF folder for the local review-web app, or write a completed school's TXT audit results back into the roster Excel with missing materials marked in red.
 ---
 
 # League Review Prep
@@ -26,13 +26,13 @@ Also use this skill after the user says a school's review is complete and asks C
 From the workspace root:
 
 ```powershell
-python codex-skills/league-review-prep/scripts/prepare_school_review.py --school-dir "学校文件夹" --make-sidecars --update-web-sources
+python codex-skills/league-review-prep/scripts/prepare_school_review.py --school-dir "学校文件夹" --update-web-sources
 ```
 
 If automatic discovery chooses the wrong file or folder, rerun with explicit paths:
 
 ```powershell
-python codex-skills/league-review-prep/scripts/prepare_school_review.py --school "学校名" --excel "学校/名单.xlsx" --pdf-dir "学校/资料目录" --make-sidecars --update-web-sources
+python codex-skills/league-review-prep/scripts/prepare_school_review.py --school "学校名" --excel "学校/名单.xlsx" --pdf-dir "学校/资料目录" --update-web-sources
 ```
 
 Use the bundled Python from `load_workspace_dependencies` when available. The script requires `openpyxl`.
@@ -45,7 +45,7 @@ When the user says a school is fully reviewed, write the school's `审核结果/
 python codex-skills/league-review-prep/scripts/prepare_school_review.py --school-dir "学校文件夹" --write-excel
 ```
 
-The write-back mode automatically uses high-confidence fuzzy matches when the Excel name and TXT-result name have the same length, the same first character, exactly one differing character, and only one candidate. This is intended for obvious homophone/near-shape typos such as `李明/李铭` or `周晴/周睛`.
+The write-back mode automatically uses high-confidence fuzzy matches when the Excel name and TXT-result name have the same length, the same first character, exactly one differing character, and only one candidate. This is intended for obvious homophone/near-shape typos such as `李明/李铭` or `周晴/周睛`. Every fuzzy or alias write must still be reported in the Markdown output so the user can review it.
 
 If there are confirmed name-shape differences that are ambiguous or not captured by this rule, pass them explicitly:
 
@@ -60,10 +60,9 @@ Rows without a matching audit-result TXT are written as red `无资料`. Empty e
 The script creates:
 
 - `审核结果/<学校名>/<人名>_审核结果.txt`
-- optional sidecar TXT next to each PDF when `--make-sidecars` is used
 - optional `review-web/sources.json` entry when `--update-web-sources` is used
 
-TXT files are created only when missing. Existing files are never overwritten.
+Review TXT files are created only under `审核结果/<学校名>`. Existing review TXT files are never overwritten.
 
 ## Name Rules
 
@@ -73,7 +72,7 @@ Normalize file names by removing common labels such as `入团申请书`, `入�
 
 Treat suspicious name-shape pairs as a report item only during pre-review preparation. Do not change Excel names or rename files in preparation mode.
 
-For Excel write-back, use exact names first. Then automatically use high-confidence unique fuzzy matches: same length, same first character, exactly one differing character, and only one candidate. Use explicit `--alias` mappings for confirmed differences outside that rule. If multiple TXT names are plausible or confidence is low, do not guess; mark the Excel row red as `无资料` and report the candidates.
+For Excel write-back, use exact names first. Then automatically use high-confidence unique fuzzy matches: same length, same first character, exactly one differing character, and only one candidate. Use explicit `--alias` mappings for confirmed differences outside that rule. All non-exact writes, including high-confidence fuzzy writes, must be reported. If multiple TXT names are plausible or confidence is low, do not guess; mark the Excel row red as `无资料` and report the candidates.
 
 ## Safety
 

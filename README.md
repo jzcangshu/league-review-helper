@@ -43,11 +43,8 @@ examples/
     示例中学团员名单.xlsx
     入团申请资料/
       赵一诺.pdf
-      赵一诺.txt
       李铭.pdf
-      李铭.txt
       王小雨.pdf
-      王小雨.txt
 审核结果/
   示例中学/
     赵一诺_审核结果.txt
@@ -72,7 +69,7 @@ examples/
 然后运行准备脚本：
 
 ```powershell
-python codex-skills/league-review-prep/scripts/prepare_school_review.py --school-dir "某某中学" --make-sidecars --update-web-sources
+python codex-skills/league-review-prep/scripts/prepare_school_review.py --school-dir "某某中学" --update-web-sources
 ```
 
 脚本会：
@@ -80,7 +77,6 @@ python codex-skills/league-review-prep/scripts/prepare_school_review.py --school
 - 自动寻找 Excel 中的 `姓名` 列
 - 自动寻找 PDF 最多的资料目录
 - 按 PDF 文件名创建 `审核结果/<学校名>/<人名>_审核结果.txt`
-- 可选创建 PDF 同名空 TXT，方便资料目录自带审核草稿
 - 报告“只在名单出现”“只在资料出现”“疑似姓名字形不一致”
 - 更新 `review-web/sources.json`，让网页工具能直接导入该学校
 
@@ -110,6 +106,19 @@ python codex-skills/league-review-prep/scripts/prepare_school_review.py --school
 - 审核准备脚本：自动读取 Excel 名单、创建 TXT、核对人名差异。
 - 结果回写脚本：审核完成后批量写回 Excel，并标记缺资料人员。
 
+## 为什么网页工具还配一个 Skill
+
+网页工具只负责审核过程中的交互：列出学生、预览 PDF、编辑并保存 `审核结果/<学校名>/<人名>_审核结果.txt`。它不适合承担“找 Excel、解析姓名列、批量创建审核结果、核对名单差异、写回 Excel”这些准备和收尾工作。
+
+`league-review-prep` skill 是给 Codex 使用的操作规程和自动化脚本，负责把新学校资料整理成网页能直接读取的结构，并在审核完成后把 TXT 结果写回 Excel。这样做的好处是：
+
+- 新学校接入时，Codex 可以按统一命令自动创建 `审核结果` 目录下的 TXT。
+- Excel 名单和 PDF 文件名的缺漏、笔误会在审核前集中报告。
+- 审核完成后，Codex 可以按同一套规则回写 Excel，缺资料者红字标记 `无资料`。
+- 规则写在 skill 和脚本里，后续换学校时不用重新解释整套流程。
+
+PDF 资料目录下不需要放同名 TXT。旧版本曾支持这种旁路草稿文件，现在已经改为只读写 `审核结果` 目录。
+
 ## 姓名匹配与笔误处理
 
 本项目以 Excel 名单作为最终名册依据，但资料文件名和审核结果 TXT 可能存在录入笔误。
@@ -120,6 +129,7 @@ python codex-skills/league-review-prep/scripts/prepare_school_review.py --school
 - 审核网页匹配 PDF 时，会优先精确匹配；文件名包含关系可作为预览匹配依据。
 - 审核结果回写 Excel 时，先用精确姓名匹配。
 - 如果 Excel 姓名和 TXT 姓名同长度、同姓、只差 1 个字，且候选唯一，会自动视为高置信笔误并写入。例如示例里的 `李明 ← 李铭`。
+- 所有姓名字形不一致都会在报告里列出；高置信自动写入也必须报告，方便人工复核。
 - 如果一个 Excel 姓名同时接近多个 TXT 姓名，脚本不会猜测，会把该行标红 `无资料` 并报告候选，等待用户通过 `--alias` 指定。
 - 资料里多出来但不在 Excel 名单中的审核结果，不会写入任何名单行，会在报告里列为“未写入的审核结果 TXT”。
 
@@ -163,7 +173,7 @@ start-review.ps1
 
 ```powershell
 # 审核前准备
-python codex-skills/league-review-prep/scripts/prepare_school_review.py --school-dir "学校文件夹" --make-sidecars --update-web-sources
+python codex-skills/league-review-prep/scripts/prepare_school_review.py --school-dir "学校文件夹" --update-web-sources
 
 # 审核后回写
 python codex-skills/league-review-prep/scripts/prepare_school_review.py --school-dir "学校文件夹" --write-excel

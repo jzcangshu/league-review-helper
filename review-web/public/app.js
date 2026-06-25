@@ -182,7 +182,7 @@ function renderImportControls() {
     const option = document.createElement("option");
     option.value = candidate.folderRelativePath;
     option.dataset.school = candidate.suggestedSchool;
-    option.textContent = `${candidate.imported ? "已导入" : "可导入"} | ${candidate.suggestedSchool} | PDF ${candidate.pdfCount} | TXT ${candidate.txtCount} | ${candidate.folderRelativePath}`;
+    option.textContent = `${candidate.imported ? "已导入" : "可导入"} | ${candidate.suggestedSchool} | PDF ${candidate.pdfCount} | ${candidate.folderRelativePath}`;
     elements.candidateSelect.appendChild(option);
   }
 
