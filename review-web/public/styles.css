@@ -1,0 +1,366 @@
+:root {
+  color-scheme: light;
+  --bg: #f4efe5;
+  --panel: rgba(255, 251, 245, 0.94);
+  --panel-strong: #fffdf9;
+  --line: #d8ccb8;
+  --line-strong: #bca98d;
+  --text: #1f1b16;
+  --muted: #6d6357;
+  --accent: #8b1e3f;
+  --accent-soft: #f5d6dd;
+  --ok: #1f6d43;
+  --warn: #9d5b00;
+  --shadow: 0 18px 40px rgba(79, 49, 15, 0.12);
+  --radius: 8px;
+  --font: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  font-family: var(--font);
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(167, 114, 47, 0.22), transparent 28%),
+    linear-gradient(135deg, #efe6d8 0%, #f7f2e8 48%, #efe3d2 100%);
+}
+
+button,
+select,
+textarea,
+input {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: minmax(420px, 42vw) 1fr;
+  height: 100vh;
+  gap: 14px;
+  padding: 14px;
+}
+
+.left-pane,
+.right-pane {
+  min-height: 0;
+  border: 1px solid rgba(121, 102, 76, 0.16);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.left-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+}
+
+.right-pane {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  background:
+    linear-gradient(180deg, rgba(87, 67, 44, 0.08), rgba(87, 67, 44, 0.02)),
+    #f7f4ef;
+}
+
+.top-bar,
+.panel,
+.shortcut-dock,
+.pdf-toolbar {
+  padding: 14px 16px;
+}
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--line);
+  background:
+    linear-gradient(135deg, rgba(139, 30, 63, 0.08), rgba(180, 142, 82, 0.08)),
+    var(--panel-strong);
+}
+
+.eyebrow {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+h1 {
+  margin: 6px 0 4px;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.meta,
+.hint,
+.save-status {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.nav-actions,
+.editor-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+button,
+select,
+input {
+  min-height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text);
+}
+
+button {
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #fff;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff9fb;
+}
+
+button.primary:hover {
+  background: #731731;
+}
+
+.panel {
+  border-bottom: 1px solid var(--line);
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.panel-head:has(.roster-select-row) {
+  align-items: center;
+}
+
+.roster-select-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 170px) minmax(0, 1fr);
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#schoolSelect,
+#studentSelect {
+  width: 100%;
+  min-width: 0;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.import-panel {
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.import-grid {
+  display: grid;
+  grid-template-columns: minmax(96px, 120px) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+#candidateSelect {
+  grid-column: 1 / -1;
+}
+
+#schoolNameInput,
+#folderPathInput {
+  width: 100%;
+  padding: 0 10px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #ece5d7;
+  color: #534431;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.badge.ok {
+  background: #d7ecdd;
+  color: var(--ok);
+}
+
+.badge.warn {
+  background: #f7e8cf;
+  color: var(--warn);
+}
+
+.editor-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+
+#reviewText {
+  width: 100%;
+  height: calc(1.6em * 3 + 24px);
+  min-height: calc(1.6em * 3 + 24px);
+  max-height: calc(1.6em * 3 + 24px);
+  resize: none;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fffcf7;
+  line-height: 1.6;
+  overflow: auto;
+}
+
+.notes-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+}
+
+.note-list {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.7;
+}
+
+.raw-notes {
+  margin-top: 10px;
+  color: var(--muted);
+}
+
+.raw-note-list {
+  margin-top: 10px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.shortcut-dock {
+  border-top: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(139, 30, 63, 0.04), rgba(255, 255, 255, 0.7));
+}
+
+.shortcut-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.shortcut-item {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.shortcut-index {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.shortcut-input {
+  width: 100%;
+  padding: 0 10px;
+}
+
+.shortcut-use {
+  min-width: 62px;
+}
+
+.pdf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.pdf-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: #d6d1c7;
+}
+
+#pdfFrame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  width: 100%;
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: #d6d1c7;
+}
+
+.pdf-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 16px;
+  text-align: center;
+  background: #f7f4ef;
+}
+
+@media (max-width: 1100px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(48vh, auto) minmax(42vh, auto);
+  }
+
+  .left-pane {
+    order: 2;
+  }
+
+  .right-pane {
+    order: 1;
+  }
+
+  .notes-panel {
+    max-height: none;
+  }
+}

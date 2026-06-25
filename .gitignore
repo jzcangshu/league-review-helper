@@ -1,0 +1,25 @@
+# Real review materials: keep these out of public repositories.
+审核结果/*
+!审核结果/示例中学/
+!审核结果/示例中学/**
+
+*.pdf
+!examples/示例中学/入团申请资料/*.pdf
+
+*.xlsx
+!examples/示例中学/示例中学团员名单.xlsx
+
+# Local runtime files
+review-web/sources.json
+!review-web/sources.json
+review-web/*.log
+review-web/review-web-port.txt
+
+# Python / Node caches
+__pycache__/
+*.py[cod]
+node_modules/
+
+# OS/editor files
+.DS_Store
+Thumbs.db

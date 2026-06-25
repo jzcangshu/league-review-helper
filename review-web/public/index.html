@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>入团志愿书审核工具</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="left-pane">
+        <header class="top-bar">
+          <div>
+            <div class="eyebrow">入团志愿书审核工具</div>
+            <h1 id="studentTitle">加载中</h1>
+            <p id="studentMeta" class="meta"></p>
+          </div>
+          <div class="nav-actions">
+            <button id="prevButton" type="button">上一个</button>
+            <button id="nextButton" type="button">下一个</button>
+          </div>
+        </header>
+
+        <section class="panel">
+          <div class="panel-head">
+            <label for="studentSelect">当前名单</label>
+            <div class="roster-select-row">
+              <select id="schoolSelect" aria-label="学校筛选"></select>
+              <select id="studentSelect" aria-label="学生选择"></select>
+            </div>
+          </div>
+          <div class="status-row">
+            <span id="pdfStatus" class="badge">PDF</span>
+            <span id="saveStatus" class="save-status">未修改</span>
+          </div>
+        </section>
+
+        <section class="panel import-panel">
+          <div class="panel-head">
+            <span>导入资料文件夹</span>
+            <span id="importStatus" class="hint">未导入</span>
+          </div>
+          <div class="import-grid">
+            <select id="candidateSelect" aria-label="候选资料文件夹"></select>
+            <input id="schoolNameInput" type="text" placeholder="学校名称" />
+            <input id="folderPathInput" type="text" placeholder="资料文件夹路径，支持工作区相对路径" />
+            <button id="importButton" type="button">导入</button>
+          </div>
+        </section>
+
+        <section class="panel editor-panel">
+          <div class="panel-head">
+            <label for="reviewText">审核结果</label>
+            <div class="editor-actions">
+              <button id="appendSeparatorButton" type="button">插入分号</button>
+              <button id="saveButton" type="button" class="primary">保存</button>
+            </div>
+          </div>
+          <textarea
+            id="reviewText"
+            spellcheck="false"
+            placeholder="这里直接修改并保存审核结果。"
+          ></textarea>
+        </section>
+
+        <section class="panel notes-panel">
+          <div class="panel-head">
+            <span>审核注意事项</span>
+          </div>
+          <ol id="noteList" class="note-list"></ol>
+        </section>
+
+        <section class="shortcut-dock">
+          <div class="panel-head">
+            <span>快捷短语</span>
+            <span class="hint">小键盘 `1-5` 直接插入</span>
+          </div>
+          <div id="shortcutList" class="shortcut-list"></div>
+        </section>
+      </aside>
+
+      <main class="right-pane">
+        <div class="pdf-toolbar">
+          <span id="pdfLabel">PDF 预览</span>
+          <span id="matchInfo" class="hint"></span>
+        </div>
+        <div class="pdf-stage">
+          <iframe id="pdfFrame" title="PDF 预览"></iframe>
+          <div id="pdfEmpty" class="pdf-empty" hidden>
+            <p>当前审核结果没有匹配到 PDF。</p>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

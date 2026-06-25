@@ -1,0 +1,9 @@
+{
+  "name": "review-web",
+  "version": "1.0.0",
+  "private": false,
+  "description": "Local youth league application PDF review helper",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

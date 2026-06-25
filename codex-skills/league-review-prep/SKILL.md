@@ -1,0 +1,80 @@
+---
+name: league-review-prep
+description: Prepare new schools for youth league application review and finish completed-school exports. Use when Codex needs to onboard a new school, create empty audit-result TXT files from PDF filenames, compare Excel roster names against PDF files, report missing or suspicious names, create sidecar TXT files for a PDF+TXT review folder, register the folder for the local review-web app, or write a completed school's TXT audit results back into the roster Excel with missing materials marked in red.
+---
+
+# League Review Prep
+
+Use this skill before manual PDF review for any newly added school folder.
+
+Also use this skill after the user says a school's review is complete and asks Codex to write all TXT audit results into that school's Excel roster.
+
+## Workflow
+
+1. Identify the school folder, roster Excel file, and PDF application folder.
+2. Run `scripts/prepare_school_review.py`.
+3. Read the Markdown report it prints.
+4. Report to the user:
+   - how many empty audit-result TXT files were created
+   - names only in Excel
+   - names only in PDF/materials
+   - suspicious name-shape pairs
+   - whether the folder was registered for `review-web`
+
+## Recommended Command
+
+From the workspace root:
+
+```powershell
+python codex-skills/league-review-prep/scripts/prepare_school_review.py --school-dir "学校文件夹" --make-sidecars --update-web-sources
+```
+
+If automatic discovery chooses the wrong file or folder, rerun with explicit paths:
+
+```powershell
+python codex-skills/league-review-prep/scripts/prepare_school_review.py --school "学校名" --excel "学校/名单.xlsx" --pdf-dir "学校/资料目录" --make-sidecars --update-web-sources
+```
+
+Use the bundled Python from `load_workspace_dependencies` when available. The script requires `openpyxl`.
+
+## Completed Review Export
+
+When the user says a school is fully reviewed, write the school's `审核结果/<学校名>/*_审核结果.txt` files back into the Excel column `入团志愿书问题备注`:
+
+```powershell
+python codex-skills/league-review-prep/scripts/prepare_school_review.py --school-dir "学校文件夹" --write-excel
+```
+
+The write-back mode automatically uses high-confidence fuzzy matches when the Excel name and TXT-result name have the same length, the same first character, exactly one differing character, and only one candidate. This is intended for obvious homophone/near-shape typos such as `李明/李铭` or `周晴/周睛`.
+
+If there are confirmed name-shape differences that are ambiguous or not captured by this rule, pass them explicitly:
+
+```powershell
+python codex-skills/league-review-prep/scripts/prepare_school_review.py --school-dir "学校文件夹" --write-excel --alias "Excel姓名=审核结果姓名"
+```
+
+Rows without a matching audit-result TXT are written as red `无资料`. Empty existing audit-result TXT files are written as blank cells.
+
+## Output Convention
+
+The script creates:
+
+- `审核结果/<学校名>/<人名>_审核结果.txt`
+- optional sidecar TXT next to each PDF when `--make-sidecars` is used
+- optional `review-web/sources.json` entry when `--update-web-sources` is used
+
+TXT files are created only when missing. Existing files are never overwritten.
+
+## Name Rules
+
+Use PDF filenames only. Do not open or parse PDF content.
+
+Normalize file names by removing common labels such as `入团申请书`, `入团志愿书`, `申请书`, `志愿书`, `审核结果`, `转PDF`, class prefixes such as `803班`, separators, and trailing six-digit export suffixes.
+
+Treat suspicious name-shape pairs as a report item only during pre-review preparation. Do not change Excel names or rename files in preparation mode.
+
+For Excel write-back, use exact names first. Then automatically use high-confidence unique fuzzy matches: same length, same first character, exactly one differing character, and only one candidate. Use explicit `--alias` mappings for confirmed differences outside that rule. If multiple TXT names are plausible or confidence is low, do not guess; mark the Excel row red as `无资料` and report the candidates.
+
+## Safety
+
+Do not delete user materials. If temporary logs or accidental cache files are created, remove only clearly generated runtime/cache files after confirming their paths stay inside the workspace or temp directory.
