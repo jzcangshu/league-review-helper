@@ -27,6 +27,7 @@ def locale_key(value: str) -> tuple[int, str]:
 def extract_name(stem: str) -> str:
     value = clean(stem)
     value = re.sub(r"^转PDF[_\-\s]*", "", value, flags=re.I)
+    value = re.sub(r"pdf", "", value, flags=re.I)
     value = re.sub(r"[_\-\s]*\d{6,}$", "", value)
     value = re.sub(r"^\d{3}\s*班?\s*", "", value)
     for token in ("入团申请书", "入团志愿书", "入团申请", "入团志愿", "申请书", "志愿书", "审核结果"):
