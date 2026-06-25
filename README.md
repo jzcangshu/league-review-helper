@@ -4,7 +4,14 @@
 
 项目默认只在本机运行，不需要上传学生材料到第三方服务。
 
+<img width="2560" height="1440" alt="运行截图（脱敏）" src="https://github.com/user-attachments/assets/cc6eeba5-4ab8-491f-9573-a6ba7d40b27f" />
+
 ## 快速上手
+
+### 0. 一图理解操作逻辑&目录架构
+
+<img width="1672" height="941" alt="操作流程示意图" src="https://github.com/user-attachments/assets/3f626a87-83bc-481c-8c73-fc4245e4820c" />
+
 
 ### 1. 准备环境
 
