@@ -46,7 +46,7 @@ if (-not $port) {
 }
 
 if (-not $port) {
-  throw '审核工具启动失败：未能确认监听端口。'
+  throw 'Review tool failed to start: unable to detect listening port.'
 }
 
 Start-Process "http://127.0.0.1:$port"
