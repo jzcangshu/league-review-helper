@@ -420,6 +420,26 @@ button.primary:hover {
   overflow: auto;
 }
 
+.export-panel {
+  flex: 0 0 auto;
+}
+
+.export-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 240px) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.export-row select {
+  width: 100%;
+  padding: 0 10px;
+}
+
+#exportStatus {
+  margin-top: 3px;
+}
+
 .note-list {
   margin: 0;
   padding-left: 20px;
@@ -709,6 +729,173 @@ button.primary:hover {
 .analysis-confirm-actions {
   padding-top: 12px;
   border-top: 1px solid var(--line);
+}
+
+.analysis-dialog {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  width: min(980px, calc(100vw - 32px));
+  height: min(760px, calc(100vh - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: hidden;
+}
+
+.analysis-dialog[open] {
+  display: grid;
+}
+
+.analysis-dialog-head strong {
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.analysis-wizard-progress {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #f8f3eb;
+}
+
+.analysis-wizard-progress span {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.analysis-wizard-progress span.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.analysis-wizard-progress span.done {
+  border-color: #8eb79c;
+  background: #d7ecdd;
+  color: var(--ok);
+}
+
+.analysis-dialog-body {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.analysis-page {
+  height: 100%;
+  padding: 14px;
+  overflow: auto;
+}
+
+.analysis-dialog-footer {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--panel-strong);
+}
+
+.analysis-dialog-footer .hint {
+  margin-right: auto;
+}
+
+.recognition-group {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.recognition-group + .recognition-group {
+  margin-top: 12px;
+}
+
+.recognition-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line);
+  background: #f8f3eb;
+}
+
+.recognition-group-head strong {
+  font-size: 17px;
+}
+
+.recognition-count {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.recognition-group-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.recognition-list {
+  padding: 0 12px;
+}
+
+.recognition-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.7fr) minmax(240px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 54px;
+  padding: 9px 0;
+}
+
+.recognition-row + .recognition-row {
+  border-top: 1px solid var(--line);
+}
+
+.recognition-row select {
+  width: 100%;
+}
+
+.recognition-empty {
+  padding: 14px 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.typo-choice-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.typo-choice {
+  min-height: 34px;
+  padding: 0 9px;
+}
+
+.typo-choice.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.report-output {
+  min-height: 100%;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  font: 15px/1.75 var(--font);
+  white-space: pre-wrap;
+  user-select: text;
 }
 
 .notes-dialog textarea {

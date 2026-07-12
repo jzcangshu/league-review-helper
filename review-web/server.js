@@ -9,6 +9,7 @@ const { promisify } = require("node:util");
 const { URL } = require("node:url");
 
 const { analyzeImport, commitImport, listFilesRecursive } = require("./lib/import-service");
+const { writeSchoolResultsToExcel } = require("./lib/export-service");
 const { isExplicitlyReviewed, loadReviewStatus, setReviewed } = require("./lib/review-status");
 const {
   isSchoolActive,
@@ -462,6 +463,29 @@ async function start() {
         dataset = await buildDataset();
         if (body.analysisId) importAnalyses.delete(body.analysisId);
         sendJson(res, 200, { ok: true, source: publicSource(source), ...result, summary: analysis.summary });
+        return;
+      }
+      if (req.method === "POST" && pathname === "/api/export/excel") {
+        const body = await readRequestBody(req);
+        const school = String(body.school || "").trim();
+        const schoolItems = dataset.items.filter((item) => item.school === school);
+        if (!school || !schoolItems.length) return sendJson(res, 400, { error: "请选择要回填的学校。" });
+        const sources = await loadSources();
+        const source = sources.find((item) => item.school === school && item.active);
+        const storedExcelPath = String(body.excelPath || source?.excelPath || "").trim();
+        if (!storedExcelPath) return sendJson(res, 200, { needsExcelPath: true });
+        const excelPath = resolveStoredPath(storedExcelPath);
+        const result = await writeSchoolResultsToExcel({
+          workspaceRoot,
+          school,
+          excelPath,
+          items: schoolItems,
+          resultColumn: body.resultColumn || ""
+        });
+        if (!result.needsResultColumn && source && source.excelPath !== toStoredPath(excelPath)) {
+          await upsertSource({ ...source, excelPath: toStoredPath(excelPath), updatedAt: new Date().toISOString() });
+        }
+        sendJson(res, 200, result);
         return;
       }
       const sourceStateMatch = pathname.match(/^\/api\/sources\/([^/]+)\/(remove|restore)$/);

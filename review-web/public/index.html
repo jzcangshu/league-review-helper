@@ -25,7 +25,7 @@
 
         <section class="panel import-panel">
           <div class="panel-head compact-head">
-            <span>资料准备</span>
+            <span>1. 导入新学校</span>
             <div class="compact-actions">
               <span id="importStatus" class="hint">未配置</span>
               <button id="manageSchoolsButton" class="small-button" type="button">学校管理</button>
@@ -68,12 +68,11 @@
             </div>
 
             <div id="importStep4" class="import-step" hidden>
-              <div class="step-title">核对完成，确认后开始审核</div>
+              <div class="step-title">资料已核对，请在弹窗中完成导入</div>
               <div class="import-row result-row">
                 <div id="analysisSummary" class="analysis-summary"></div>
-                <button id="viewIssuesButton" type="button">查看差异</button>
+                <button id="viewIssuesButton" class="primary" type="button">继续核对并导入</button>
                 <button id="backToImportStep3Button" type="button">重新选择</button>
-                <button id="commitImportButton" class="primary" type="button">确认导入</button>
               </div>
             </div>
           </div>
@@ -81,7 +80,7 @@
 
         <section class="panel roster-panel">
           <div class="panel-head roster-heading">
-            <label for="studentSelect">当前名单</label>
+            <label for="studentSelect">2. 当前名单</label>
             <div class="status-row">
               <span id="pdfStatus" class="badge">PDF</span>
               <span id="saveStatus" class="save-status">未修改</span>
@@ -95,7 +94,7 @@
 
         <section class="panel editor-panel">
           <div class="panel-head">
-            <label for="reviewText">审核结果</label>
+            <label for="reviewText">3. 审核结果</label>
             <div class="editor-actions">
               <button id="reviewStateButton" class="small-button" type="button">确认无问题</button>
             </div>
@@ -103,22 +102,36 @@
           <textarea
             id="reviewText"
             spellcheck="false"
-            placeholder="这里直接修改并保存审核结果。"
+            placeholder="手动输入审核结果，或使用小键盘插入快捷短语&#10;审核结果会自动保存，无问题则留空"
           ></textarea>
         </section>
 
         <section class="panel notes-panel">
           <div class="panel-head">
-            <span>审核注意事项</span>
+            <span>4. 审核注意事项</span>
             <button id="editNotesButton" class="small-button" type="button">编辑</button>
           </div>
           <ol id="noteList" class="note-list"></ol>
         </section>
 
+        <section class="panel export-panel">
+          <div class="panel-head">
+            <span>5. 将全校审核结果填入 Excel 名单</span>
+          </div>
+          <div class="export-row">
+            <div>
+              <strong id="exportSchoolLabel">当前学校</strong>
+              <div id="exportStatus" class="hint">写入前会自动备份原 Excel，并按姓名去重补充名单。</div>
+            </div>
+            <select id="exportResultColumnSelect" aria-label="回填结果列" hidden></select>
+            <button id="writeBackExcelButton" class="primary" type="button">回填当前学校</button>
+          </div>
+        </section>
+
         <section class="shortcut-dock">
           <div class="panel-head">
             <span>快捷短语</span>
-            <span class="hint">小键盘 `1-5` 直接插入</span>
+            <span class="hint">小键盘 `1-6` 直接插入</span>
           </div>
           <div id="shortcutList" class="shortcut-list"></div>
         </section>
@@ -154,19 +167,33 @@
       </main>
     </div>
 
-    <dialog id="issuesDialog" class="compact-dialog">
-      <div class="dialog-head">
-        <strong>资料核对与历史结果冲突</strong>
-        <div class="dialog-head-actions">
-          <button id="copyReportButton" class="small-button" type="button">复制核对报告</button>
-          <button id="closeIssuesDialogButton" class="icon-button" type="button">×</button>
-        </div>
+    <dialog id="issuesDialog" class="compact-dialog analysis-dialog">
+      <div class="dialog-head analysis-dialog-head">
+        <strong id="analysisDialogTitle">Excel 导入审核意见预览</strong>
+        <button id="closeIssuesDialogButton" class="icon-button" type="button">×</button>
       </div>
-      <div class="dialog-guidance">疑似姓名请打开 PDF 核对首页手写姓名，再选择对应名单人员；若确为不同人员，选择“作为新人员加入 Excel”。</div>
-      <div id="issueSummary" class="dialog-scroll"></div>
-      <div class="dialog-actions analysis-confirm-actions">
-        <span id="analysisConfirmMessage" class="hint">请检查姓名和历史问题预览。</span>
-        <button id="confirmAnalysisButton" class="primary" type="button">确认预览无误</button>
+      <div id="analysisWizardProgress" class="analysis-wizard-progress" aria-label="名单核对步骤">
+        <span data-page="1">1 审核意见预览</span>
+        <span data-page="2">2 错漏人员识别</span>
+        <span data-page="3">3 名单核对报告</span>
+      </div>
+      <div class="analysis-dialog-body">
+        <section id="analysisPage1" class="analysis-page">
+          <div id="historyPreviewContainer"></div>
+        </section>
+        <section id="analysisPage2" class="analysis-page" hidden>
+          <div id="recognitionSummary"></div>
+        </section>
+        <section id="analysisPage3" class="analysis-page" hidden>
+          <pre id="reportOutput" class="report-output"></pre>
+        </section>
+      </div>
+      <div class="analysis-dialog-footer">
+        <span id="analysisWizardMessage" class="hint"></span>
+        <button id="analysisBackButton" type="button" hidden>上一步</button>
+        <button id="analysisNextButton" class="primary" type="button">确认预览，下一步</button>
+        <button id="confirmImportButton" class="primary" type="button" hidden disabled>确认导入名单</button>
+        <button id="finishAnalysisButton" class="primary" type="button" hidden>完成</button>
       </div>
     </dialog>
 

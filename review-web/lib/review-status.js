@@ -31,8 +31,17 @@ async function setReviewed(reviewDir, studentName, reviewed) {
   return Boolean(status.reviewed[studentName]);
 }
 
+async function renameReviewedName(reviewDir, oldName, newName) {
+  if (!oldName || !newName || oldName === newName) return;
+  const status = await loadReviewStatus(reviewDir);
+  if (!status.reviewed[oldName]) return;
+  status.reviewed[newName] ||= status.reviewed[oldName];
+  delete status.reviewed[oldName];
+  await fsp.writeFile(statusPath(reviewDir), `${JSON.stringify(status, null, 2)}\n`, "utf8");
+}
+
 function isExplicitlyReviewed(status, studentName) {
   return Boolean(status?.reviewed?.[studentName]);
 }
 
-module.exports = { STATUS_FILE, isExplicitlyReviewed, loadReviewStatus, setReviewed, statusPath };
+module.exports = { STATUS_FILE, isExplicitlyReviewed, loadReviewStatus, renameReviewedName, setReviewed, statusPath };

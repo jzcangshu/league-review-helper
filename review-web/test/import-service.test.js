@@ -124,3 +124,35 @@ test("requires manual confirmation for a fuzzy name and can append the PDF name 
   assert.ok(names.includes("张珊"));
   assert.equal(await fs.readFile(path.join(fixture.reviewRoot, "示例中学", "张珊_审核结果.txt"), "utf8"), "");
 });
+
+test("uses the Excel name as canonical and renames the PDF and review TXT", async () => {
+  const fixture = await createFixture([{ name: "张三", result: "" }]);
+  await fs.rename(path.join(fixture.pdfDir, "张三.pdf"), path.join(fixture.pdfDir, "张珊.pdf"));
+  const analysis = await analyzeImport({
+    workspaceRoot: fixture.root,
+    reviewRoot: fixture.reviewRoot,
+    school: "示例中学",
+    pdfDir: fixture.pdfDir,
+    excelPath: fixture.excelPath
+  });
+  await commitImport({ analysis, bindings: { 张珊: "excel:张三" } });
+  assert.equal(await fs.readFile(path.join(fixture.pdfDir, "张三.pdf"), "utf8"), "%PDF-1.4\n");
+  assert.equal(await fs.readFile(path.join(fixture.reviewRoot, "示例中学", "张三_审核结果.txt"), "utf8"), "");
+});
+
+test("uses the PDF name as canonical and updates the Excel roster name", async () => {
+  const fixture = await createFixture([{ name: "张三", result: "" }]);
+  await fs.rename(path.join(fixture.pdfDir, "张三.pdf"), path.join(fixture.pdfDir, "张珊.pdf"));
+  const analysis = await analyzeImport({
+    workspaceRoot: fixture.root,
+    reviewRoot: fixture.reviewRoot,
+    school: "示例中学",
+    pdfDir: fixture.pdfDir,
+    excelPath: fixture.excelPath
+  });
+  await commitImport({ analysis, bindings: { 张珊: "pdf:张三" } });
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(fixture.excelPath);
+  assert.equal(workbook.getWorksheet("名单").getCell("A2").value, "张珊");
+  assert.equal(await fs.readFile(path.join(fixture.reviewRoot, "示例中学", "张珊_审核结果.txt"), "utf8"), "");
+});

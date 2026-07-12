@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
 const ExcelJS = require("exceljs");
+const { renameReviewedName } = require("./review-status");
 
 const {
   classifyReviewConflict,
@@ -168,8 +169,9 @@ async function analyzeImport(options) {
     });
   }
 
-  const onlyExcel = excelNames.filter((name) => !usedExcelNames.has(name));
-  const onlyPdf = items.filter((item) => !item.excelName).map((item) => item.name);
+  const possibleTypoNames = new Set(items.flatMap((item) => item.matchCandidates || []));
+  const onlyExcel = excelNames.filter((name) => !usedExcelNames.has(name) && !possibleTypoNames.has(name));
+  const onlyPdf = items.filter((item) => item.matchKind === "missing").map((item) => item.name);
   const fuzzyMatches = items
     .filter((item) => item.matchKind === "fuzzy")
     .map((item) => ({ excelName: item.excelName, pdfName: item.name }));
@@ -222,8 +224,10 @@ async function commitImport({ analysis, bindings = {}, resolutions = {} }) {
   if (analysis.duplicates.excel.length || analysis.duplicates.pdf.length) {
     throw new Error("名单或资料中存在重复姓名，请修正后重新检查。");
   }
-  const { items, appendNames } = resolveBindings(analysis, bindings);
-  const excelUpdate = appendNames.length ? await appendRosterRows(analysis, appendNames) : { appended: 0, backupPath: "" };
+  const { items: resolvedItems, appendNames, corrections } = resolveBindings(analysis, bindings);
+  await validateNameCorrections(analysis, resolvedItems, corrections, appendNames);
+  const excelUpdate = await updateRosterWorkbook(analysis, appendNames, corrections);
+  const items = await applyNameCorrections(analysis, resolvedItems, corrections);
   const schoolReviewDir = path.join(analysis.reviewRoot, analysis.school);
   await fsp.mkdir(schoolReviewDir, { recursive: true });
   let created = 0;
@@ -242,6 +246,7 @@ async function commitImport({ analysis, bindings = {}, resolutions = {} }) {
   }
 
   for (const item of items) {
+    if (item.skip) continue;
     let nextContent = null;
     const action = item.conflict.action;
     if (action === "create_from_excel" || action === "fill_empty") {
@@ -269,17 +274,28 @@ async function commitImport({ analysis, bindings = {}, resolutions = {} }) {
     }
   }
 
-  return { created, updated, kept, backedUp, backupDir, appended: excelUpdate.appended, excelBackupPath: excelUpdate.backupPath };
+  return {
+    created,
+    updated,
+    kept,
+    backedUp,
+    backupDir,
+    appended: excelUpdate.appended,
+    renamed: excelUpdate.renamed || corrections.length,
+    excelBackupPath: excelUpdate.backupPath
+  };
 }
 
 function resolveBindings(analysis, bindings) {
   const rosterByName = new Map(analysis.rosterRows.map((row) => [row.name, row]));
   const usedNames = new Set(analysis.items.filter((item) => item.matchKind === "exact").map((item) => item.excelName));
   const appendNames = [];
+  const corrections = [];
   const items = analysis.items.map((item) => {
     if (item.matchKind === "exact") return item;
     const selected = String(bindings[item.name] || "").trim();
     if (!selected) throw new Error(`请确认“${item.name}”应绑定到哪位人员。`);
+    if (selected === "__skip__") return { ...item, skip: true };
     if (selected === "__append__") {
       appendNames.push(item.name);
       return {
@@ -289,23 +305,40 @@ function resolveBindings(analysis, bindings) {
         conflict: classifyReviewConflict("", item.txtExists, item.txtContent)
       };
     }
-    const row = rosterByName.get(selected);
-    if (!row) throw new Error(`名单中不存在“${selected}”，请重新核对绑定。`);
-    if (usedNames.has(selected)) throw new Error(`名单中的“${selected}”被重复绑定。`);
-    usedNames.add(selected);
+    const correctionMatch = selected.match(/^(excel|pdf):(.+)$/);
+    const selectedName = correctionMatch ? correctionMatch[2] : selected;
+    const row = rosterByName.get(selectedName);
+    if (!row) throw new Error(`名单中不存在“${selectedName}”，请重新核对绑定。`);
+    if (usedNames.has(selectedName)) throw new Error(`名单中的“${selectedName}”被重复绑定。`);
+    const canonicalName = correctionMatch?.[1] === "pdf" ? item.name : selectedName;
+    if (correctionMatch?.[1] === "pdf" && rosterByName.has(canonicalName) && canonicalName !== selectedName) {
+      throw new Error(`名单中已经存在“${canonicalName}”，不能再次改名。`);
+    }
+    usedNames.add(selectedName);
+    if (correctionMatch) {
+      corrections.push({
+        pdfName: item.name,
+        excelName: selectedName,
+        canonicalName,
+        source: correctionMatch[1]
+      });
+    }
     return {
       ...item,
-      excelName: selected,
+      excelName: selectedName,
       excelResult: row.result,
-      conflict: classifyReviewConflict(row.result, item.txtExists, item.txtContent)
+      conflict: classifyReviewConflict(row.result, item.txtExists, item.txtContent),
+      canonicalName
     };
   });
-  return { items, appendNames };
+  return { items, appendNames, corrections };
 }
 
-async function appendRosterRows(analysis, names) {
+async function updateRosterWorkbook(analysis, names, corrections = []) {
+  const excelCorrections = corrections.filter((item) => item.source === "pdf" && item.excelName !== item.canonicalName);
+  if (!names.length && !excelCorrections.length) return { appended: 0, renamed: 0, backupPath: "" };
   if (path.extname(analysis.excelPath).toLowerCase() !== ".xlsx") {
-    throw new Error("带宏 Excel 无法安全自动追加人员，请先另存为 .xlsx 后重新导入。");
+    throw new Error("带宏 Excel 无法安全自动修改名单，请先另存为 .xlsx 后重新导入。");
   }
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(analysis.excelPath);
@@ -330,8 +363,113 @@ async function appendRosterRows(analysis, names) {
     if (analysis.roster.resultColumn >= 0) row.getCell(analysis.roster.resultColumn + 1).value = null;
     insertAt += 1;
   }
+  const rowsByName = new Map(analysis.rosterRows.map((row) => [row.name, row]));
+  for (const correction of excelCorrections) {
+    const rosterRow = rowsByName.get(correction.excelName);
+    if (!rosterRow) throw new Error(`无法在 Excel 中定位“${correction.excelName}”。`);
+    sheet.getRow(rosterRow.rowNumber).getCell(analysis.roster.nameColumn + 1).value = correction.canonicalName;
+  }
   await workbook.xlsx.writeFile(analysis.excelPath);
-  return { appended: names.length, backupPath };
+  return { appended: names.length, renamed: excelCorrections.length, backupPath };
+}
+
+async function appendRosterRows(analysis, names) {
+  return updateRosterWorkbook(analysis, names, []);
+}
+
+async function mergeOrMoveReviewFile(analysis, oldName, newName) {
+  if (!oldName || !newName || oldName === newName) return path.join(analysis.reviewRoot, analysis.school, `${newName}_审核结果.txt`);
+  const reviewDir = path.join(analysis.reviewRoot, analysis.school);
+  const oldPath = path.join(reviewDir, `${oldName}_审核结果.txt`);
+  const newPath = path.join(reviewDir, `${newName}_审核结果.txt`);
+  const oldExists = fs.existsSync(oldPath);
+  const newExists = fs.existsSync(newPath);
+  if (!oldExists) return newPath;
+  if (!newExists) {
+    await fsp.rename(oldPath, newPath);
+    return newPath;
+  }
+  const [oldContent, newContent] = await Promise.all([
+    fsp.readFile(oldPath, "utf8"),
+    fsp.readFile(newPath, "utf8")
+  ]);
+  if (oldContent.trim() && newContent.trim() && oldContent.trim() !== newContent.trim()) {
+    throw new Error(`“${oldName}”和“${newName}”均有不同审核结果，已停止自动统一姓名。`);
+  }
+  if (!newContent.trim() && oldContent.trim()) await fsp.writeFile(newPath, oldContent, "utf8");
+  const archiveDir = path.join(path.dirname(analysis.reviewRoot), "审核结果历史", analysis.school, `姓名统一-${safeTimestamp()}`);
+  await fsp.mkdir(archiveDir, { recursive: true });
+  await fsp.rename(oldPath, path.join(archiveDir, path.basename(oldPath)));
+  return newPath;
+}
+
+async function applyNameCorrections(analysis, items, corrections) {
+  const byPdfName = new Map(corrections.map((item) => [item.pdfName, item]));
+  const correctedItems = [];
+  for (const item of items) {
+    const correction = byPdfName.get(item.name);
+    if (!correction) {
+      correctedItems.push(item);
+      continue;
+    }
+    let pdfPath = item.pdfPath;
+    if (correction.source === "excel" && correction.pdfName !== correction.canonicalName) {
+      const extension = path.extname(pdfPath);
+      const base = path.basename(pdfPath, extension);
+      const renamedBase = base.includes(correction.pdfName)
+        ? base.replace(correction.pdfName, correction.canonicalName)
+        : correction.canonicalName;
+      const targetPdfPath = path.join(path.dirname(pdfPath), `${renamedBase}${extension}`);
+      if (fs.existsSync(targetPdfPath)) throw new Error(`PDF 文件“${path.basename(targetPdfPath)}”已经存在，已停止自动改名。`);
+      await fsp.rename(pdfPath, targetPdfPath);
+      pdfPath = targetPdfPath;
+    }
+    const oldReviewName = correction.source === "excel" ? correction.pdfName : correction.excelName;
+    const reviewPath = await mergeOrMoveReviewFile(analysis, oldReviewName, correction.canonicalName);
+    await renameReviewedName(path.dirname(reviewPath), oldReviewName, correction.canonicalName);
+    const txtExists = fs.existsSync(reviewPath);
+    const txtContent = txtExists ? await fsp.readFile(reviewPath, "utf8") : "";
+    correctedItems.push({
+      ...item,
+      name: correction.canonicalName,
+      pdfPath,
+      reviewPath,
+      txtExists,
+      txtContent,
+      conflict: classifyReviewConflict(item.excelResult, txtExists, txtContent)
+    });
+  }
+  return correctedItems;
+}
+
+async function validateNameCorrections(analysis, items, corrections, appendNames) {
+  if ((appendNames.length || corrections.some((item) => item.source === "pdf")) && path.extname(analysis.excelPath).toLowerCase() !== ".xlsx") {
+    throw new Error("带宏 Excel 无法安全自动修改名单，请先另存为 .xlsx 后重新导入。");
+  }
+  const itemsByName = new Map(items.map((item) => [item.name, item]));
+  for (const correction of corrections) {
+    const item = itemsByName.get(correction.pdfName);
+    if (correction.source === "excel" && correction.pdfName !== correction.canonicalName) {
+      const extension = path.extname(item.pdfPath);
+      const base = path.basename(item.pdfPath, extension);
+      const renamedBase = base.includes(correction.pdfName)
+        ? base.replace(correction.pdfName, correction.canonicalName)
+        : correction.canonicalName;
+      const targetPdfPath = path.join(path.dirname(item.pdfPath), `${renamedBase}${extension}`);
+      if (fs.existsSync(targetPdfPath)) throw new Error(`PDF 文件“${path.basename(targetPdfPath)}”已经存在，已停止自动改名。`);
+    }
+    const oldReviewName = correction.source === "excel" ? correction.pdfName : correction.excelName;
+    if (oldReviewName === correction.canonicalName) continue;
+    const reviewDir = path.join(analysis.reviewRoot, analysis.school);
+    const oldPath = path.join(reviewDir, `${oldReviewName}_审核结果.txt`);
+    const newPath = path.join(reviewDir, `${correction.canonicalName}_审核结果.txt`);
+    if (fs.existsSync(oldPath) && fs.existsSync(newPath)) {
+      const [oldContent, newContent] = await Promise.all([fsp.readFile(oldPath, "utf8"), fsp.readFile(newPath, "utf8")]);
+      if (oldContent.trim() && newContent.trim() && oldContent.trim() !== newContent.trim()) {
+        throw new Error(`“${oldReviewName}”和“${correction.canonicalName}”均有不同审核结果，已停止自动统一姓名。`);
+      }
+    }
+  }
 }
 
 module.exports = {
@@ -342,5 +480,7 @@ module.exports = {
   listFilesRecursive,
   resolveBindings,
   resolveUserPath,
+  updateRosterWorkbook,
+  validateNameCorrections,
   uniqueNameMatch
 };
