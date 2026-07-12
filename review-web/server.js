@@ -372,8 +372,7 @@ async function start() {
       }
       if (req.method === "GET" && pathname === "/api/sources") {
         sendJson(res, 200, {
-          sources: (await loadSources()).map(publicSource),
-          candidates: await discoverSourceFolders()
+          sources: (await loadSources()).map(publicSource)
         });
         return;
       }
@@ -405,6 +404,7 @@ async function start() {
           workspaceRoot: undefined,
           reviewRoot: undefined,
           rosterRows: undefined,
+          historyPreview: analysis.rosterRows.map((row) => ({ name: row.name, problem: row.result })),
           items: analysis.items.map((item) => ({
             pdfIndex: item.pdfIndex,
             name: item.name,

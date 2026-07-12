@@ -17,7 +17,6 @@ const state = {
   items: [],
   notes: [],
   sources: [],
-  candidates: [],
   selectedSchool: localStorage.getItem(SCHOOL_FILTER_KEY) || "all",
   currentIndex: -1,
   currentReviewId: null,
@@ -28,10 +27,10 @@ const state = {
   saveTimer: null,
   shortcuts: loadShortcuts(),
   importStep: 1,
-  importOpen: false,
   pdfDir: "",
   excelPath: "",
   analysis: null,
+  analysisConfirmed: false,
   pdfDocument: null,
   pdfRenderTask: null,
   pdfLoadToken: 0,
@@ -45,13 +44,13 @@ const state = {
 
 const elementIds = [
   "studentTitle", "studentMeta", "schoolSelect", "studentSelect", "reviewText", "noteList", "prevButton",
-  "nextButton", "saveButton", "appendSeparatorButton", "saveStatus", "pdfStatus", "matchInfo", "pdfLabel",
-  "shortcutList", "importStatus", "manageSchoolsButton", "toggleImportButton", "importBody", "importStep1",
-  "importStep2", "importStep3", "importStep4", "candidateSelect", "pickPdfFolderButton", "toImportStep2Button",
-  "pdfPathPreview", "excelPathPreview", "pickExcelButton", "backToImportStep1Button", "toImportStep3Button",
+  "nextButton", "saveStatus", "pdfStatus", "matchInfo", "pdfLabel",
+  "shortcutList", "importStatus", "manageSchoolsButton", "importBody", "importStep1",
+  "importStep2", "importStep3", "importStep4", "pickPdfFolderButton",
+  "pdfPathPreview", "excelPathPreview", "pickExcelButton", "backToImportStep1Button",
   "schoolNameInput", "resultColumnSelect", "backToImportStep2Button", "analyzeImportButton", "importMessage",
   "analysisSummary", "viewIssuesButton", "backToImportStep3Button", "commitImportButton", "editNotesButton",
-  "importProgress", "reviewStateButton", "copyReportButton",
+  "importProgress", "reviewStateButton", "copyReportButton", "analysisConfirmMessage", "confirmAnalysisButton",
   "prevPageButton", "nextPageButton", "pageIndicator", "zoomOutButton", "zoomIndicator", "zoomInButton",
   "rotateButton", "downloadButton", "pdfCanvas", "pdfLoading", "pdfEmpty", "pdfStage", "pdfThumbnails", "issuesDialog",
   "closeIssuesDialogButton", "issueSummary", "schoolsDialog", "closeSchoolsDialogButton", "sourceList",
@@ -101,13 +100,6 @@ function suggestSchool(inputPath) {
   return generic.has(parts.at(-1)) && parts.length > 1 ? parts.at(-2) : parts.at(-1);
 }
 
-function setImportOpen(open) {
-  state.importOpen = open;
-  elements.importBody.hidden = !open;
-  elements.toggleImportButton.textContent = open ? "收起" : "展开";
-  document.querySelector(".left-pane").classList.toggle("import-open", open);
-}
-
 function showImportStep(step) {
   state.importStep = step;
   const stepLabels = ["资料文件夹", "Excel 名单", "核对资料", "确认导入"];
@@ -130,27 +122,9 @@ function setImportMessage(text, isError = false) {
 async function loadSources() {
   const payload = await api("/api/sources");
   state.sources = payload.sources || [];
-  state.candidates = payload.candidates || [];
-  renderCandidateOptions();
   renderSourceList();
   const activeCount = state.sources.filter((source) => source.active).length;
   elements.importStatus.textContent = activeCount ? `已配置 ${activeCount} 校` : "尚未配置";
-  if (!activeCount) setImportOpen(true);
-}
-
-function renderCandidateOptions() {
-  elements.candidateSelect.innerHTML = "";
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = state.candidates.length ? "选择已发现的资料文件夹" : "未发现候选资料文件夹";
-  elements.candidateSelect.appendChild(placeholder);
-  for (const candidate of state.candidates) {
-    const option = document.createElement("option");
-    option.value = candidate.folderPath;
-    option.dataset.school = candidate.suggestedSchool;
-    option.textContent = `${candidate.imported ? "已导入" : "可导入"}｜${candidate.suggestedSchool}｜${candidate.pdfCount} 份`;
-    elements.candidateSelect.appendChild(option);
-  }
 }
 
 function renderSourceList() {
@@ -203,7 +177,7 @@ async function choosePath(kind) {
     if (kind === "folder") {
       state.pdfDir = payload.path;
       elements.pdfPathPreview.textContent = payload.path;
-      if (!elements.schoolNameInput.value.trim()) elements.schoolNameInput.value = suggestSchool(payload.path);
+      elements.schoolNameInput.value = suggestSchool(payload.path);
     } else {
       state.excelPath = payload.path;
       elements.excelPathPreview.textContent = payload.path;
@@ -231,7 +205,10 @@ async function analyzeImport() {
     setImportMessage("请先完成前两步。", true);
     return;
   }
+  showImportStep(3);
   elements.analyzeImportButton.disabled = true;
+  elements.analyzeImportButton.hidden = true;
+  elements.resultColumnSelect.hidden = true;
   setImportMessage("正在核对名单与资料...");
   try {
     const analysis = await api("/api/import/analyze", { method: "POST", body: JSON.stringify(importPayload()) });
@@ -239,6 +216,7 @@ async function analyzeImport() {
     elements.schoolNameInput.value = analysis.school;
     if (analysis.needsResultColumn) {
       elements.resultColumnSelect.hidden = false;
+      elements.analyzeImportButton.hidden = false;
       elements.resultColumnSelect.innerHTML = "";
       for (const choice of analysis.resultColumnChoices) {
         const option = document.createElement("option");
@@ -246,7 +224,7 @@ async function analyzeImport() {
         option.textContent = choice;
         elements.resultColumnSelect.appendChild(option);
       }
-      setImportMessage("请选择历史审核结果列，再次点击检查资料。", true);
+      setImportMessage("检测到多个含“问题”的列，请选择正确列后继续。", true);
       return;
     }
     renderAnalysis(analysis);
@@ -263,7 +241,13 @@ function renderAnalysis(analysis) {
   elements.analysisSummary.textContent =
     `资料 ${summary.pdfCount}｜名单 ${summary.rosterCount}｜匹配 ${summary.matchedCount}｜历史结果 ${summary.historyCount}｜冲突 ${summary.conflictCount}`;
   const duplicateCount = (analysis.duplicates?.excel?.length || 0) + (analysis.duplicates?.pdf?.length || 0);
-  elements.commitImportButton.disabled = duplicateCount > 0;
+  state.analysisConfirmed = false;
+  elements.commitImportButton.disabled = true;
+  elements.confirmAnalysisButton.disabled = false;
+  elements.confirmAnalysisButton.textContent = "确认预览无误";
+  elements.analysisConfirmMessage.textContent = duplicateCount > 0
+    ? "名单或资料存在重复姓名，修正后才能导入。"
+    : "请检查姓名和历史问题预览。";
   renderIssues(analysis);
   if (!elements.issuesDialog.open) elements.issuesDialog.showModal();
 }
@@ -283,6 +267,7 @@ function appendIssue(title, content) {
 
 function renderIssues(analysis) {
   elements.issueSummary.innerHTML = "";
+  renderHistoryPreview(analysis);
   appendIssue("只在名单出现", analysis.onlyExcel?.join("、"));
   appendIssue("名单重复姓名", analysis.duplicates?.excel?.join("、"));
   appendIssue("资料重复姓名", analysis.duplicates?.pdf?.join("、"));
@@ -360,6 +345,50 @@ function renderIssues(analysis) {
   }
 }
 
+function renderHistoryPreview(analysis) {
+  const section = document.createElement("section");
+  section.className = "history-preview";
+  const heading = document.createElement("div");
+  heading.className = "history-preview-title";
+  const title = document.createElement("strong");
+  title.textContent = "历史审核意见预览";
+  const detected = document.createElement("span");
+  detected.className = "hint";
+  detected.textContent = analysis.resultColumn ? `自动识别列：${analysis.resultColumn}` : "未识别到历史问题列";
+  heading.append(title, detected);
+
+  const table = document.createElement("table");
+  table.className = "history-preview-table";
+  table.innerHTML = "<thead><tr><th>姓名</th><th>问题</th></tr></thead>";
+  const body = document.createElement("tbody");
+  for (const item of analysis.historyPreview || []) {
+    const row = document.createElement("tr");
+    const name = document.createElement("td");
+    name.textContent = item.name;
+    const problem = document.createElement("td");
+    problem.textContent = item.problem || "";
+    row.append(name, problem);
+    body.appendChild(row);
+  }
+  table.appendChild(body);
+  section.append(heading, table);
+  elements.issueSummary.appendChild(section);
+}
+
+function confirmAnalysisPreview() {
+  if (!state.analysis) return;
+  const duplicateCount = (state.analysis.duplicates?.excel?.length || 0) + (state.analysis.duplicates?.pdf?.length || 0);
+  if (duplicateCount > 0) {
+    elements.analysisConfirmMessage.textContent = "请先修正重复姓名后重新检查。";
+    return;
+  }
+  state.analysisConfirmed = true;
+  elements.confirmAnalysisButton.disabled = true;
+  elements.confirmAnalysisButton.textContent = "已确认";
+  elements.analysisConfirmMessage.textContent = "预览已确认，可以关闭窗口并导入。";
+  elements.commitImportButton.disabled = false;
+}
+
 function collectResolutions() {
   const resolutions = {};
   for (const select of elements.issueSummary.querySelectorAll("select[data-conflict-name]")) {
@@ -416,6 +445,7 @@ async function copyReport() {
 
 async function commitImport() {
   if (!state.analysis) return;
+  if (!state.analysisConfirmed) return window.alert("请先在核对窗口确认姓名和历史问题预览。 ");
   elements.commitImportButton.disabled = true;
   try {
     const bindings = collectBindings();
@@ -433,8 +463,14 @@ async function commitImport() {
     elements.importStatus.textContent = `新建 ${payload.created}｜更新 ${payload.updated}｜新增名单 ${payload.appended || 0}`;
     if (elements.issuesDialog.open) elements.issuesDialog.close();
     state.analysis = null;
+    state.analysisConfirmed = false;
+    state.pdfDir = "";
+    state.excelPath = "";
+    elements.schoolNameInput.value = "";
+    elements.pdfPathPreview.textContent = "等待选择";
+    elements.excelPathPreview.textContent = "等待选择";
+    elements.resultColumnSelect.hidden = true;
     showImportStep(1);
-    setImportOpen(false);
     await Promise.all([loadSources(), loadBootstrapData()]);
   } catch (error) {
     window.alert(`导入失败：${error.message}`);
@@ -528,17 +564,6 @@ function insertAtCursor(text) {
   textarea.value = `${prefix}${separator}${text}${textarea.value.slice(end)}`;
   const cursor = prefix.length + separator.length + text.length;
   textarea.setSelectionRange(cursor, cursor);
-  textarea.focus();
-  handleReviewInput();
-}
-
-function insertSeparator() {
-  const textarea = elements.reviewText;
-  const start = textarea.selectionStart;
-  const prefix = textarea.value.slice(0, start);
-  if (/[；;]\s*$/.test(prefix)) return;
-  textarea.value = `${prefix}；${textarea.value.slice(textarea.selectionEnd)}`;
-  textarea.setSelectionRange(start + 1, start + 1);
   textarea.focus();
   handleReviewInput();
 }
@@ -871,33 +896,35 @@ async function rotatePdf() {
 }
 
 function attachEvents() {
-  elements.toggleImportButton.addEventListener("click", () => setImportOpen(!state.importOpen));
   elements.manageSchoolsButton.addEventListener("click", () => elements.schoolsDialog.showModal());
   elements.closeSchoolsDialogButton.addEventListener("click", () => elements.schoolsDialog.close());
-  elements.candidateSelect.addEventListener("change", () => {
-    const option = elements.candidateSelect.selectedOptions[0];
-    if (!option?.value) return;
-    state.pdfDir = option.value;
-    elements.pdfPathPreview.textContent = option.value;
-    elements.schoolNameInput.value = option.dataset.school || suggestSchool(option.value);
+  elements.pickPdfFolderButton.addEventListener("click", async () => {
+    if (await choosePath("folder")) {
+      state.excelPath = "";
+      elements.excelPathPreview.textContent = "等待选择";
+      showImportStep(2);
+    }
   });
-  elements.pickPdfFolderButton.addEventListener("click", () => choosePath("folder"));
-  elements.toImportStep2Button.addEventListener("click", () => {
-    if (!state.pdfDir) return window.alert("请先选择团员 PDF 资料文件夹。");
+  elements.pickExcelButton.addEventListener("click", async () => {
+    if (await choosePath("excel")) await analyzeImport();
+  });
+  elements.backToImportStep1Button.addEventListener("click", () => {
+    state.pdfDir = "";
+    elements.pdfPathPreview.textContent = "等待选择";
+    showImportStep(1);
+  });
+  elements.backToImportStep2Button.addEventListener("click", () => {
+    state.excelPath = "";
+    elements.excelPathPreview.textContent = "等待选择";
+    elements.resultColumnSelect.hidden = true;
     showImportStep(2);
   });
-  elements.pickExcelButton.addEventListener("click", () => choosePath("excel"));
-  elements.backToImportStep1Button.addEventListener("click", () => showImportStep(1));
-  elements.toImportStep3Button.addEventListener("click", () => {
-    if (!state.excelPath) return window.alert("请先选择团员名单 Excel。");
-    showImportStep(3);
-  });
-  elements.backToImportStep2Button.addEventListener("click", () => showImportStep(2));
   elements.analyzeImportButton.addEventListener("click", analyzeImport);
-  elements.backToImportStep3Button.addEventListener("click", () => showImportStep(3));
+  elements.backToImportStep3Button.addEventListener("click", () => showImportStep(2));
   elements.viewIssuesButton.addEventListener("click", () => elements.issuesDialog.showModal());
   elements.closeIssuesDialogButton.addEventListener("click", () => elements.issuesDialog.close());
   elements.copyReportButton.addEventListener("click", () => copyReport().catch((error) => window.alert(`复制失败：${error.message}`)));
+  elements.confirmAnalysisButton.addEventListener("click", confirmAnalysisPreview);
   elements.commitImportButton.addEventListener("click", commitImport);
 
   elements.schoolSelect.addEventListener("change", async () => {
@@ -910,9 +937,7 @@ function attachEvents() {
   elements.prevButton.addEventListener("click", () => switchFilteredOffset(-1));
   elements.nextButton.addEventListener("click", () => switchFilteredOffset(1));
   elements.reviewText.addEventListener("input", handleReviewInput);
-  elements.saveButton.addEventListener("click", () => saveCurrentReview({ force: true }));
   elements.reviewStateButton.addEventListener("click", toggleEmptyReviewState);
-  elements.appendSeparatorButton.addEventListener("click", insertSeparator);
   elements.editNotesButton.addEventListener("click", editNotes);
   elements.closeNotesDialogButton.addEventListener("click", () => elements.notesDialog.close());
   elements.saveNotesButton.addEventListener("click", saveNotes);
@@ -931,11 +956,6 @@ function attachEvents() {
       event.preventDefault();
       event.stopImmediatePropagation();
       movePdfPage(event.code === "PageDown" ? 1 : -1);
-      return;
-    }
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
-      event.preventDefault();
-      saveCurrentReview({ force: true });
       return;
     }
     const shortcut = { Numpad1: 0, Numpad2: 1, Numpad3: 2, Numpad4: 3, Numpad5: 4 }[event.code];

@@ -29,11 +29,10 @@
             <div class="compact-actions">
               <span id="importStatus" class="hint">未配置</span>
               <button id="manageSchoolsButton" class="small-button" type="button">学校管理</button>
-              <button id="toggleImportButton" class="small-button" type="button">展开</button>
             </div>
           </div>
 
-          <div id="importBody" class="import-body" hidden>
+          <div id="importBody" class="import-body">
             <div id="importProgress" class="import-progress" aria-label="资料导入进度">
               <span data-step="1">1 资料文件夹</span>
               <span data-step="2">2 Excel 名单</span>
@@ -41,34 +40,31 @@
               <span data-step="4">4 确认导入</span>
             </div>
             <div id="importStep1" class="import-step">
-              <div class="step-title">选择存放团员 PDF 的文件夹</div>
-              <div class="import-row">
-                <select id="candidateSelect" aria-label="候选资料文件夹"></select>
-                <button id="pickPdfFolderButton" type="button">选择文件夹</button>
-                <button id="toImportStep2Button" class="primary" type="button">下一步</button>
+              <div class="guided-import-action">
+                <div class="step-title">请先选择存放团员 PDF 的文件夹</div>
+                <button id="pickPdfFolderButton" class="primary" type="button">选择 PDF 文件夹</button>
+                <div id="pdfPathPreview" class="path-preview">等待选择</div>
               </div>
-              <div id="pdfPathPreview" class="path-preview">尚未选择</div>
             </div>
 
             <div id="importStep2" class="import-step" hidden>
-              <div class="step-title">选择学校提供的团员名单 Excel</div>
-              <div class="import-row">
-                <div id="excelPathPreview" class="path-box">尚未选择</div>
-                <button id="pickExcelButton" type="button">选择文件</button>
-                <button id="backToImportStep1Button" type="button">上一步</button>
-                <button id="toImportStep3Button" class="primary" type="button">下一步</button>
+              <div class="guided-import-action">
+                <div class="step-title">接下来请选择学校提供的名单 Excel</div>
+                <button id="pickExcelButton" class="primary" type="button">选择 Excel 文件</button>
+                <button id="backToImportStep1Button" class="small-button" type="button">重新选择 PDF 文件夹</button>
+                <div id="excelPathPreview" class="path-preview">等待选择</div>
               </div>
             </div>
 
             <div id="importStep3" class="import-step" hidden>
-              <div class="step-title">确认学校名称并核对名单与资料</div>
-              <div class="import-row">
-                <input id="schoolNameInput" type="text" placeholder="学校名称" />
+              <div class="guided-import-action">
+                <div class="step-title">正在识别名单、历史问题和 PDF 资料</div>
+                <input id="schoolNameInput" type="hidden" />
                 <select id="resultColumnSelect" aria-label="历史审核结果列" hidden></select>
-                <button id="backToImportStep2Button" type="button">上一步</button>
-                <button id="analyzeImportButton" class="primary" type="button">检查资料</button>
+                <button id="analyzeImportButton" class="primary" type="button" hidden>确认此列并继续</button>
+                <button id="backToImportStep2Button" class="small-button" type="button">重新选择 Excel</button>
+                <div id="importMessage" class="path-preview">请稍候</div>
               </div>
-              <div id="importMessage" class="path-preview"></div>
             </div>
 
             <div id="importStep4" class="import-step" hidden>
@@ -76,7 +72,7 @@
               <div class="import-row result-row">
                 <div id="analysisSummary" class="analysis-summary"></div>
                 <button id="viewIssuesButton" type="button">查看差异</button>
-                <button id="backToImportStep3Button" type="button">上一步</button>
+                <button id="backToImportStep3Button" type="button">重新选择</button>
                 <button id="commitImportButton" class="primary" type="button">确认导入</button>
               </div>
             </div>
@@ -102,8 +98,6 @@
             <label for="reviewText">审核结果</label>
             <div class="editor-actions">
               <button id="reviewStateButton" class="small-button" type="button">确认无问题</button>
-              <button id="appendSeparatorButton" type="button">插入分号</button>
-              <button id="saveButton" type="button" class="primary">保存</button>
             </div>
           </div>
           <textarea
@@ -170,6 +164,10 @@
       </div>
       <div class="dialog-guidance">疑似姓名请打开 PDF 核对首页手写姓名，再选择对应名单人员；若确为不同人员，选择“作为新人员加入 Excel”。</div>
       <div id="issueSummary" class="dialog-scroll"></div>
+      <div class="dialog-actions analysis-confirm-actions">
+        <span id="analysisConfirmMessage" class="hint">请检查姓名和历史问题预览。</span>
+        <button id="confirmAnalysisButton" class="primary" type="button">确认预览无误</button>
+      </div>
     </dialog>
 
     <dialog id="schoolsDialog" class="compact-dialog">

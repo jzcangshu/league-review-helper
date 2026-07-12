@@ -16,16 +16,16 @@ test("normalizes common class and application labels", () => {
 });
 
 test("detects result columns by priority", () => {
-  const headers = ["姓名", "普通备注", "问题备注", "入团志愿书问题备注（复审）"];
+  const headers = ["姓名", "普通备注", "问题备注", "入团志愿书问题备注（复审）", "问题"];
   const result = detectResultColumns(headers);
-  assert.equal(result.selected.header, "入团志愿书问题备注（复审）");
+  assert.equal(result.selected.header, "问题备注");
   assert.equal(result.selected.priority, 1);
 });
 
-test("does not treat arbitrary suffix notes as the exact note fallback", () => {
-  const result = detectResultColumns(["姓名", "班级备注"]);
-  assert.equal(result.selected, null);
-  assert.deepEqual(result.candidates, []);
+test("falls back from exact problem to a unique header containing problem", () => {
+  assert.equal(detectResultColumns(["姓名", "问题"]).selected.header, "问题");
+  assert.equal(detectResultColumns(["姓名", "入团志愿书问题备注（复审）"]).selected.header, "入团志愿书问题备注（复审）");
+  assert.equal(detectResultColumns(["姓名", "初审问题", "复审问题"]).ambiguous, true);
 });
 
 test("classifies repeat-review conflicts conservatively", () => {

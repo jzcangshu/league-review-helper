@@ -36,9 +36,9 @@ function detectResultColumns(headers) {
     cleaned: clean(header)
   }));
   const rules = [
-    { priority: 1, label: "入团志愿书问题备注", matches: (header) => header.includes("入团志愿书问题备注") },
-    { priority: 2, label: "问题备注", matches: (header) => header.includes("问题备注") },
-    { priority: 3, label: "备注", matches: (header) => header === "备注" }
+    { priority: 1, label: "问题备注", matches: (header) => header === "问题备注" },
+    { priority: 2, label: "问题", matches: (header) => header === "问题" },
+    { priority: 3, label: "包含问题", matches: (header) => header.includes("问题") }
   ];
 
   for (const rule of rules) {
