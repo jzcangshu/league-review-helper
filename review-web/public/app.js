@@ -489,10 +489,14 @@ function renderRecognitionSummary(analysis) {
             for (const sibling of choices.querySelectorAll(".typo-choice")) sibling.classList.remove("active");
             button.classList.add("active");
             row.dataset.bindingValue = button.dataset.bindingValue;
+            choices.classList.remove("needs-attention");
             updateConfirmImportState();
           });
         }
-        choices.append(excelCorrect, pdfCorrect);
+        const separator = document.createElement("span");
+        separator.className = "typo-choice-or";
+        separator.textContent = "or";
+        choices.append(excelCorrect, separator, pdfCorrect);
       }
       const openPdf = document.createElement("button");
       openPdf.type = "button";
@@ -544,10 +548,23 @@ function updateConfirmImportState() {
   const duplicateCount = (state.analysis.duplicates?.excel?.length || 0) + (state.analysis.duplicates?.pdf?.length || 0);
   const unresolved = [...elements.recognitionSummary.querySelectorAll("[data-typo-name]")]
     .filter((row) => !row.dataset.bindingValue).length;
-  elements.confirmImportButton.disabled = duplicateCount > 0 || unresolved > 0;
+  const blocked = duplicateCount > 0 || unresolved > 0;
+  elements.confirmImportButton.setAttribute("aria-disabled", String(blocked));
+  elements.confirmImportButton.classList.toggle("blocked", blocked);
+  elements.analysisWizardMessage.classList.toggle("error", blocked);
   if (duplicateCount > 0) elements.analysisWizardMessage.textContent = "存在重复姓名，请修正源文件后重新核对。";
   else if (unresolved > 0) elements.analysisWizardMessage.textContent = `还有 ${unresolved} 人未确认真实姓名。`;
   else elements.analysisWizardMessage.textContent = "所有处理方案已完成，可以导入名单。";
+}
+
+function showUnresolvedImportFeedback() {
+  const button = elements.confirmImportButton;
+  button.classList.remove("shake");
+  void button.offsetWidth;
+  button.classList.add("shake");
+  for (const row of elements.recognitionSummary.querySelectorAll("[data-typo-name]")) {
+    if (!row.dataset.bindingValue) row.querySelector(".typo-choice-list")?.classList.add("needs-attention");
+  }
 }
 
 function buildReportText() {
@@ -575,6 +592,10 @@ function buildReportText() {
 
 async function commitImport() {
   if (!state.analysis) return;
+  if (elements.confirmImportButton.getAttribute("aria-disabled") === "true") {
+    showUnresolvedImportFeedback();
+    return;
+  }
   elements.confirmImportButton.disabled = true;
   try {
     const bindings = collectBindings();

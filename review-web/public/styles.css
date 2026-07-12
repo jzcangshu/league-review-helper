@@ -11,6 +11,7 @@
   --accent-soft: #f5d6dd;
   --ok: #1f6d43;
   --warn: #9d5b00;
+  --danger: #b42318;
   --shadow: 0 18px 40px rgba(79, 49, 15, 0.12);
   --radius: 8px;
   --font: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -805,6 +806,27 @@ button.primary:hover {
   margin-right: auto;
 }
 
+.analysis-dialog-footer .hint.error {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+#confirmImportButton.blocked {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+#confirmImportButton.shake {
+  animation: blocked-button-shake 280ms ease-in-out;
+}
+
+@keyframes blocked-button-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  50% { transform: translateX(4px); }
+  75% { transform: translateX(-3px); }
+}
+
 .recognition-group {
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -872,6 +894,16 @@ button.primary:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  align-items: center;
+  padding: 4px;
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.typo-choice-list.needs-attention {
+  border-color: var(--danger);
+  background: #fff1f0;
 }
 
 .typo-choice {
@@ -884,6 +916,13 @@ button.primary:hover {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 700;
+}
+
+.typo-choice-or {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: lowercase;
 }
 
 .report-output {
