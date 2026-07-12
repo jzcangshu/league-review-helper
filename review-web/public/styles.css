@@ -577,11 +577,47 @@ button.primary:hover {
   background: #d6d1c7;
 }
 
+.pdf-page-surface {
+  position: relative;
+  width: max-content;
+  height: max-content;
+  margin: 12px auto;
+}
+
 #pdfCanvas {
   display: block;
-  margin: 12px auto;
   background: #fff;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
+}
+
+.ocr-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.ocr-highlight {
+  position: absolute;
+  border: 2px solid rgba(207, 72, 0, 0.92);
+  background: rgba(255, 224, 64, 0.32);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.72) inset;
+}
+
+.ocr-status {
+  max-width: 132px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#ocrToggleButton.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .pdf-empty {

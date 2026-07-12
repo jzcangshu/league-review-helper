@@ -30,6 +30,7 @@ review-web/sources.json
 review-web/sources.local.json
 review-web/*.log
 review-web/review-web-port.txt
+review-web/.ocr-cache/
 
 # Python / Node caches
 __pycache__/

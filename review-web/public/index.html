@@ -151,13 +151,18 @@
             <span id="zoomIndicator">100%</span>
             <button id="zoomInButton" class="icon-button" type="button" title="放大">＋</button>
             <button id="rotateButton" class="icon-button" type="button" title="旋转">↻</button>
+            <span id="ocrStatus" class="ocr-status" title="本地识别扫描件中的指定文字">OCR 等待中</span>
+            <button id="ocrToggleButton" class="small-button active" type="button" aria-pressed="true">OCR 标注</button>
             <button id="downloadButton" class="small-button" type="button">下载</button>
           </div>
         </div>
         <div class="pdf-workspace">
           <aside id="pdfThumbnails" class="pdf-thumbnails" aria-label="PDF 页面缩略图"></aside>
           <div id="pdfStage" class="pdf-stage">
-            <canvas id="pdfCanvas" hidden></canvas>
+            <div id="pdfPageSurface" class="pdf-page-surface" hidden>
+              <canvas id="pdfCanvas"></canvas>
+              <div id="ocrOverlay" class="ocr-overlay" aria-hidden="true"></div>
+            </div>
             <div id="pdfLoading" class="pdf-empty" hidden>正在打开资料</div>
             <div id="pdfEmpty" class="pdf-empty">
               <p>当前没有可预览的 PDF。</p>

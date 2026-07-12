@@ -10,6 +10,7 @@ const { URL } = require("node:url");
 
 const { analyzeImport, commitImport, listFilesRecursive } = require("./lib/import-service");
 const { writeSchoolResultsToExcel } = require("./lib/export-service");
+const { recognizePdf } = require("./lib/ocr-service");
 const { isExplicitlyReviewed, loadReviewStatus, setReviewed } = require("./lib/review-status");
 const {
   isSchoolActive,
@@ -30,6 +31,8 @@ const publicRoot = path.join(appRoot, "public");
 const sourcesTemplatePath = path.join(appRoot, "sources.json");
 const sourcesLocalPath = path.join(appRoot, "sources.local.json");
 const pdfJsRoot = path.join(appRoot, "node_modules", "pdfjs-dist", "build");
+const ocrCacheRoot = path.join(appRoot, ".ocr-cache");
+const ocrScriptPath = path.join(appRoot, "scripts", "ocr-pdf.ps1");
 const host = "127.0.0.1";
 const preferredPort = 4173;
 const portFilePath = path.join(os.tmpdir(), "review-web-port.json");
@@ -536,6 +539,18 @@ async function start() {
         const item = dataset.items.find((entry) => entry.id === decodeURIComponent(pdfMatch[1]));
         if (!item?.pdfPath) return sendJson(res, 404, { error: "没有找到对应的 PDF 资料。" });
         await serveFile(res, item.pdfPath, pdfMatch[2] ? "attachment" : "inline");
+        return;
+      }
+      const ocrMatch = pathname.match(/^\/api\/ocr\/([^/]+)$/);
+      if (req.method === "GET" && ocrMatch) {
+        const item = dataset.items.find((entry) => entry.id === decodeURIComponent(ocrMatch[1]));
+        if (!item?.pdfPath) return sendJson(res, 404, { error: "没有找到对应的 PDF 资料。" });
+        const result = await recognizePdf({
+          pdfPath: item.pdfPath,
+          cacheRoot: ocrCacheRoot,
+          scriptPath: ocrScriptPath
+        });
+        sendJson(res, 200, result);
         return;
       }
       if (req.method === "GET" && pathname === "/vendor/pdf.mjs") {
