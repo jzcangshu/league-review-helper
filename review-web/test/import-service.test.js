@@ -101,3 +101,26 @@ test("blocks commit when duplicate names could collide", async () => {
     /重复姓名/
   );
 });
+
+test("requires manual confirmation for a fuzzy name and can append the PDF name to Excel", async () => {
+  const fixture = await createFixture([{ name: "张三", result: "" }]);
+  await fs.rename(path.join(fixture.pdfDir, "张三.pdf"), path.join(fixture.pdfDir, "张珊.pdf"));
+  const analysis = await analyzeImport({
+    workspaceRoot: fixture.root,
+    reviewRoot: fixture.reviewRoot,
+    school: "示例中学",
+    pdfDir: fixture.pdfDir,
+    excelPath: fixture.excelPath
+  });
+  assert.equal(analysis.items[0].matchKind, "fuzzy");
+  await assert.rejects(commitImport({ analysis }), /请确认/);
+
+  const result = await commitImport({ analysis, bindings: { 张珊: "__append__" } });
+  assert.equal(result.appended, 1);
+  assert.ok(result.excelBackupPath);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(fixture.excelPath);
+  const names = workbook.getWorksheet("名单").getColumn(1).values;
+  assert.ok(names.includes("张珊"));
+  assert.equal(await fs.readFile(path.join(fixture.reviewRoot, "示例中学", "张珊_审核结果.txt"), "utf8"), "");
+});

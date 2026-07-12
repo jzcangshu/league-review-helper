@@ -22,6 +22,7 @@ const state = {
   currentIndex: -1,
   currentReviewId: null,
   currentReviewContent: "",
+  currentReviewReviewed: false,
   dirty: false,
   saving: false,
   saveTimer: null,
@@ -50,6 +51,7 @@ const elementIds = [
   "pdfPathPreview", "excelPathPreview", "pickExcelButton", "backToImportStep1Button", "toImportStep3Button",
   "schoolNameInput", "resultColumnSelect", "backToImportStep2Button", "analyzeImportButton", "importMessage",
   "analysisSummary", "viewIssuesButton", "backToImportStep3Button", "commitImportButton", "editNotesButton",
+  "importProgress", "reviewStateButton", "copyReportButton",
   "prevPageButton", "nextPageButton", "pageIndicator", "zoomOutButton", "zoomIndicator", "zoomInButton",
   "rotateButton", "downloadButton", "pdfCanvas", "pdfLoading", "pdfEmpty", "pdfStage", "pdfThumbnails", "issuesDialog",
   "closeIssuesDialogButton", "issueSummary", "schoolsDialog", "closeSchoolsDialogButton", "sourceList",
@@ -103,12 +105,20 @@ function setImportOpen(open) {
   state.importOpen = open;
   elements.importBody.hidden = !open;
   elements.toggleImportButton.textContent = open ? "收起" : "展开";
+  document.querySelector(".left-pane").classList.toggle("import-open", open);
 }
 
 function showImportStep(step) {
   state.importStep = step;
+  const stepLabels = ["资料文件夹", "Excel 名单", "核对资料", "确认导入"];
   for (let index = 1; index <= 4; index += 1) {
     elements[`importStep${index}`].hidden = index !== step;
+  }
+  for (const marker of elements.importProgress.querySelectorAll("[data-step]")) {
+    const markerStep = Number(marker.dataset.step);
+    marker.classList.toggle("active", markerStep === step);
+    marker.classList.toggle("done", markerStep < step);
+    marker.textContent = markerStep < step ? `✓ ${stepLabels[markerStep - 1]}` : `${markerStep} ${stepLabels[markerStep - 1]}`;
   }
 }
 
@@ -255,6 +265,7 @@ function renderAnalysis(analysis) {
   const duplicateCount = (analysis.duplicates?.excel?.length || 0) + (analysis.duplicates?.pdf?.length || 0);
   elements.commitImportButton.disabled = duplicateCount > 0;
   renderIssues(analysis);
+  if (!elements.issuesDialog.open) elements.issuesDialog.showModal();
 }
 
 function appendIssue(title, content) {
@@ -273,10 +284,55 @@ function appendIssue(title, content) {
 function renderIssues(analysis) {
   elements.issueSummary.innerHTML = "";
   appendIssue("只在名单出现", analysis.onlyExcel?.join("、"));
-  appendIssue("只在资料出现", analysis.onlyPdf?.join("、"));
-  appendIssue("疑似姓名差异", analysis.fuzzyMatches?.map((item) => `${item.excelName}/${item.pdfName}`).join("、"));
   appendIssue("名单重复姓名", analysis.duplicates?.excel?.join("、"));
   appendIssue("资料重复姓名", analysis.duplicates?.pdf?.join("、"));
+
+  const unmatchedItems = (analysis.items || []).filter((item) => item.matchKind !== "exact");
+  for (const item of unmatchedItems) {
+    const row = document.createElement("div");
+    row.className = "name-match-row";
+    const copy = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = `PDF：${item.name}`;
+    const hint = document.createElement("div");
+    hint.className = "hint";
+    hint.textContent = item.matchKind === "fuzzy" && item.excelName
+      ? `疑似对应名单中的“${item.excelName}”`
+      : "名单中没有自动找到同名人员";
+    copy.append(name, hint);
+
+    const select = document.createElement("select");
+    select.dataset.bindingName = item.name;
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "请核对手写姓名后选择";
+    select.appendChild(placeholder);
+    if (item.matchKind === "fuzzy" && item.excelName) {
+      const suggested = document.createElement("option");
+      suggested.value = item.excelName;
+      suggested.textContent = `绑定：${item.excelName}（疑似）`;
+      select.appendChild(suggested);
+    }
+    const append = document.createElement("option");
+    append.value = "__append__";
+    append.textContent = `不绑定，将“${item.name}”作为新人员加入 Excel`;
+    select.appendChild(append);
+    for (const rosterName of analysis.rosterNames || []) {
+      if (rosterName === item.excelName) continue;
+      const option = document.createElement("option");
+      option.value = rosterName;
+      option.textContent = `绑定：${rosterName}`;
+      select.appendChild(option);
+    }
+
+    const openPdf = document.createElement("button");
+    openPdf.type = "button";
+    openPdf.className = "small-button";
+    openPdf.textContent = "打开 PDF 核对";
+    openPdf.addEventListener("click", () => window.open(item.pdfPreviewUrl, "_blank", "noopener"));
+    row.append(copy, select, openPdf);
+    elements.issueSummary.appendChild(row);
+  }
 
   const conflicts = (analysis.items || []).filter((item) => item.conflict?.requiresDecision);
   for (const item of conflicts) {
@@ -312,16 +368,70 @@ function collectResolutions() {
   return resolutions;
 }
 
+function collectBindings() {
+  const bindings = {};
+  for (const select of elements.issueSummary.querySelectorAll("select[data-binding-name]")) {
+    if (!select.value) throw new Error(`请先核对“${select.dataset.bindingName}”首页手写姓名并选择处理方式。`);
+    bindings[select.dataset.bindingName] = select.value;
+  }
+  return bindings;
+}
+
+function buildReportText() {
+  const analysis = state.analysis;
+  if (!analysis) return "尚未生成核对报告。";
+  const lines = [
+    `# ${analysis.school} 资料核对报告`,
+    "",
+    `PDF：${analysis.summary.pdfCount}；Excel 名单：${analysis.summary.rosterCount}；自动匹配：${analysis.summary.matchedCount}`,
+    `只在名单出现：${analysis.onlyExcel?.join("、") || "无"}`,
+    `只在资料出现：${analysis.onlyPdf?.join("、") || "无"}`,
+    `历史结果冲突：${analysis.summary.conflictCount}`,
+    "",
+    "## 姓名核对决定"
+  ];
+  const bindingSelects = [...elements.issueSummary.querySelectorAll("select[data-binding-name]")];
+  if (!bindingSelects.length) lines.push("无");
+  for (const select of bindingSelects) {
+    const decision = select.value === "__append__"
+      ? `作为新人员加入 Excel`
+      : select.value ? `绑定到 ${select.value}` : "尚未确认";
+    lines.push(`- ${select.dataset.bindingName}：${decision}`);
+  }
+  lines.push("", "## 历史结果冲突决定");
+  const conflictSelects = [...elements.issueSummary.querySelectorAll("select[data-conflict-name]")];
+  if (!conflictSelects.length) lines.push("无");
+  for (const select of conflictSelects) {
+    lines.push(`- ${select.dataset.conflictName}：${select.selectedOptions[0].textContent}`);
+  }
+  return lines.join("\n");
+}
+
+async function copyReport() {
+  await navigator.clipboard.writeText(buildReportText());
+  const previous = elements.copyReportButton.textContent;
+  elements.copyReportButton.textContent = "已复制";
+  setTimeout(() => { elements.copyReportButton.textContent = previous; }, 1200);
+}
+
 async function commitImport() {
   if (!state.analysis) return;
   elements.commitImportButton.disabled = true;
   try {
+    const bindings = collectBindings();
     const matchingSource = state.sources.find((source) => source.school === state.analysis.school);
     const payload = await api("/api/import/commit", {
       method: "POST",
-      body: JSON.stringify({ ...importPayload(), sourceId: matchingSource?.id || "", resolutions: collectResolutions() })
+      body: JSON.stringify({
+        ...importPayload(),
+        analysisId: state.analysis.analysisId,
+        sourceId: matchingSource?.id || "",
+        bindings,
+        resolutions: collectResolutions()
+      })
     });
-    elements.importStatus.textContent = `新建 ${payload.created}｜更新 ${payload.updated}｜保留 ${payload.kept}`;
+    elements.importStatus.textContent = `新建 ${payload.created}｜更新 ${payload.updated}｜新增名单 ${payload.appended || 0}`;
+    if (elements.issuesDialog.open) elements.issuesDialog.close();
     state.analysis = null;
     showImportStep(1);
     setImportOpen(false);
@@ -440,39 +550,78 @@ async function loadReview(item) {
   const draft = localStorage.getItem(draftKey(item.id));
   state.currentReviewId = item.id;
   state.currentReviewContent = serverContent;
+  state.currentReviewReviewed = Boolean(payload.reviewed);
   if (draft !== null && draft !== serverContent) {
     elements.reviewText.value = draft;
     markDirty(true, "已恢复未保存草稿");
   } else {
     elements.reviewText.value = serverContent;
-    markDirty(false, "已读取审核结果");
+    const reviewStatus = payload.reviewed
+      ? serverContent.trim() ? "已审，有审核意见" : "已审，无问题"
+      : "未审核";
+    markDirty(false, reviewStatus);
   }
+  updateReviewStateButton();
 }
 
-async function saveCurrentReview() {
+function updateReviewStateButton() {
+  const item = state.items.find((entry) => entry.id === state.currentReviewId);
+  const hasContent = Boolean(elements.reviewText.value.trim());
+  elements.reviewStateButton.hidden = hasContent || !item;
+  if (!item) return;
+  elements.reviewStateButton.textContent = item.reviewed ? "改为未审核" : "确认无问题";
+  elements.reviewStateButton.classList.toggle("primary", !item.reviewed);
+}
+
+async function saveCurrentReview({ force = false } = {}) {
   clearTimeout(state.saveTimer);
-  if (!state.currentReviewId || state.saving || !state.dirty) return true;
+  if (!state.currentReviewId || state.saving || (!state.dirty && !force)) return true;
   state.saving = true;
   setSaveStatus("正在保存...");
   try {
-    await api(`/api/review/${state.currentReviewId}`, {
+    const payload = await api(`/api/review/${state.currentReviewId}`, {
       method: "PUT",
-      body: JSON.stringify({ content: elements.reviewText.value })
+      body: JSON.stringify({ content: elements.reviewText.value, reviewed: true })
     });
     state.currentReviewContent = elements.reviewText.value;
     localStorage.removeItem(draftKey(state.currentReviewId));
     const item = state.items.find((entry) => entry.id === state.currentReviewId);
-    if (item) item.reviewed = Boolean(state.currentReviewContent.trim());
+    if (item) item.reviewed = Boolean(payload.reviewed);
+    state.currentReviewReviewed = Boolean(payload.reviewed);
     markDirty(false, "已自动保存");
     renderSchoolOptions();
     renderStudentOptions();
     elements.studentSelect.value = state.currentReviewId;
+    updateReviewStateButton();
     return true;
   } catch (error) {
     markDirty(true, `保存失败：${error.message}`);
     return false;
   } finally {
     state.saving = false;
+  }
+}
+
+async function toggleEmptyReviewState() {
+  const item = state.items.find((entry) => entry.id === state.currentReviewId);
+  if (!item || elements.reviewText.value.trim()) return;
+  elements.reviewStateButton.disabled = true;
+  try {
+    const payload = await api(`/api/review/${state.currentReviewId}`, {
+      method: "PUT",
+      body: JSON.stringify({ content: "", reviewed: !item.reviewed })
+    });
+    item.reviewed = Boolean(payload.reviewed);
+    state.currentReviewReviewed = item.reviewed;
+    markDirty(false, item.reviewed ? "已确认无问题" : "已改为未审核");
+    renderSchoolOptions();
+    renderStudentOptions();
+    elements.studentSelect.value = state.currentReviewId;
+    updateReviewStateButton();
+  } catch (error) {
+    setSaveStatus(`状态修改失败：${error.message}`);
+  } finally {
+    elements.reviewStateButton.disabled = false;
   }
 }
 
@@ -506,6 +655,7 @@ async function switchToItem(item) {
     elements.studentMeta.textContent = "请导入学校或调整筛选";
     elements.reviewText.value = "";
     elements.reviewText.disabled = true;
+    elements.reviewStateButton.hidden = true;
     await loadPdf(null);
     return;
   }
@@ -525,6 +675,7 @@ function handleReviewInput() {
   markDirty(elements.reviewText.value !== state.currentReviewContent);
   clearTimeout(state.saveTimer);
   state.saveTimer = setTimeout(saveCurrentReview, 900);
+  updateReviewStateButton();
 }
 
 async function loadBootstrapData() {
@@ -670,7 +821,7 @@ async function renderPdfThumbnails(pdfDocument, loadToken) {
     if (loadToken !== state.pdfLoadToken || pdfDocument !== state.pdfDocument) return;
     const page = await pdfDocument.getPage(Number(button.dataset.page));
     const baseViewport = page.getViewport({ scale: 1 });
-    const scale = Math.min(84 / baseViewport.width, 112 / baseViewport.height);
+    const scale = Math.min(168 / baseViewport.width, 224 / baseViewport.height);
     const viewport = page.getViewport({ scale });
     const canvas = button.querySelector("canvas");
     canvas.width = Math.max(1, Math.floor(viewport.width));
@@ -746,6 +897,7 @@ function attachEvents() {
   elements.backToImportStep3Button.addEventListener("click", () => showImportStep(3));
   elements.viewIssuesButton.addEventListener("click", () => elements.issuesDialog.showModal());
   elements.closeIssuesDialogButton.addEventListener("click", () => elements.issuesDialog.close());
+  elements.copyReportButton.addEventListener("click", () => copyReport().catch((error) => window.alert(`复制失败：${error.message}`)));
   elements.commitImportButton.addEventListener("click", commitImport);
 
   elements.schoolSelect.addEventListener("change", async () => {
@@ -758,7 +910,8 @@ function attachEvents() {
   elements.prevButton.addEventListener("click", () => switchFilteredOffset(-1));
   elements.nextButton.addEventListener("click", () => switchFilteredOffset(1));
   elements.reviewText.addEventListener("input", handleReviewInput);
-  elements.saveButton.addEventListener("click", saveCurrentReview);
+  elements.saveButton.addEventListener("click", () => saveCurrentReview({ force: true }));
+  elements.reviewStateButton.addEventListener("click", toggleEmptyReviewState);
   elements.appendSeparatorButton.addEventListener("click", insertSeparator);
   elements.editNotesButton.addEventListener("click", editNotes);
   elements.closeNotesDialogButton.addEventListener("click", () => elements.notesDialog.close());
@@ -782,7 +935,7 @@ function attachEvents() {
     }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
       event.preventDefault();
-      saveCurrentReview();
+      saveCurrentReview({ force: true });
       return;
     }
     const shortcut = { Numpad1: 0, Numpad2: 1, Numpad3: 2, Numpad4: 3, Numpad5: 4 }[event.code];

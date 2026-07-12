@@ -145,7 +145,7 @@ async function analyzeImport(options) {
 
   const usedExcelNames = new Set();
   const items = [];
-  for (const entry of pdfEntries) {
+  for (const [pdfIndex, entry] of pdfEntries.entries()) {
     const match = uniqueNameMatch(entry.name, excelNames);
     const excelRow = match.name ? roster.rows.find((row) => row.name === match.name) : null;
     if (excelRow) usedExcelNames.add(excelRow.name);
@@ -154,6 +154,7 @@ async function analyzeImport(options) {
     const txtContent = txtExists ? await fsp.readFile(reviewPath, "utf8") : "";
     const conflict = classifyReviewConflict(excelRow?.result || "", txtExists, txtContent);
     items.push({
+      pdfIndex,
       name: entry.name,
       pdfPath: entry.pdfPath,
       excelName: excelRow?.name || "",
@@ -186,8 +187,12 @@ async function analyzeImport(options) {
     roster: {
       sheet: roster.sheet,
       headerRow: roster.headerRow,
-      count: roster.rows.length
+      count: roster.rows.length,
+      nameColumn: roster.nameColumn,
+      resultColumn: roster.resultColumn
     },
+    rosterRows: roster.rows,
+    rosterNames: excelNames,
     items,
     onlyExcel,
     onlyPdf,
@@ -212,11 +217,13 @@ function safeTimestamp() {
   return new Date().toISOString().replace(/[:.]/g, "-");
 }
 
-async function commitImport({ analysis, resolutions = {} }) {
+async function commitImport({ analysis, bindings = {}, resolutions = {} }) {
   if (analysis.needsResultColumn) throw new Error("请先选择要读取的审核结果列。");
   if (analysis.duplicates.excel.length || analysis.duplicates.pdf.length) {
     throw new Error("名单或资料中存在重复姓名，请修正后重新检查。");
   }
+  const { items, appendNames } = resolveBindings(analysis, bindings);
+  const excelUpdate = appendNames.length ? await appendRosterRows(analysis, appendNames) : { appended: 0, backupPath: "" };
   const schoolReviewDir = path.join(analysis.reviewRoot, analysis.school);
   await fsp.mkdir(schoolReviewDir, { recursive: true });
   let created = 0;
@@ -234,7 +241,7 @@ async function commitImport({ analysis, resolutions = {} }) {
     backedUp += 1;
   }
 
-  for (const item of analysis.items) {
+  for (const item of items) {
     let nextContent = null;
     const action = item.conflict.action;
     if (action === "create_from_excel" || action === "fill_empty") {
@@ -262,14 +269,78 @@ async function commitImport({ analysis, resolutions = {} }) {
     }
   }
 
-  return { created, updated, kept, backedUp, backupDir };
+  return { created, updated, kept, backedUp, backupDir, appended: excelUpdate.appended, excelBackupPath: excelUpdate.backupPath };
+}
+
+function resolveBindings(analysis, bindings) {
+  const rosterByName = new Map(analysis.rosterRows.map((row) => [row.name, row]));
+  const usedNames = new Set(analysis.items.filter((item) => item.matchKind === "exact").map((item) => item.excelName));
+  const appendNames = [];
+  const items = analysis.items.map((item) => {
+    if (item.matchKind === "exact") return item;
+    const selected = String(bindings[item.name] || "").trim();
+    if (!selected) throw new Error(`请确认“${item.name}”应绑定到哪位人员。`);
+    if (selected === "__append__") {
+      appendNames.push(item.name);
+      return {
+        ...item,
+        excelName: "",
+        excelResult: "",
+        conflict: classifyReviewConflict("", item.txtExists, item.txtContent)
+      };
+    }
+    const row = rosterByName.get(selected);
+    if (!row) throw new Error(`名单中不存在“${selected}”，请重新核对绑定。`);
+    if (usedNames.has(selected)) throw new Error(`名单中的“${selected}”被重复绑定。`);
+    usedNames.add(selected);
+    return {
+      ...item,
+      excelName: selected,
+      excelResult: row.result,
+      conflict: classifyReviewConflict(row.result, item.txtExists, item.txtContent)
+    };
+  });
+  return { items, appendNames };
+}
+
+async function appendRosterRows(analysis, names) {
+  if (path.extname(analysis.excelPath).toLowerCase() !== ".xlsx") {
+    throw new Error("带宏 Excel 无法安全自动追加人员，请先另存为 .xlsx 后重新导入。");
+  }
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(analysis.excelPath);
+  const sheet = workbook.getWorksheet(analysis.roster.sheet);
+  if (!sheet) throw new Error("无法重新打开所选名单工作表。");
+
+  const timestamp = safeTimestamp();
+  const backupDir = path.join(path.dirname(analysis.reviewRoot), "Excel历史", analysis.school, timestamp);
+  await fsp.mkdir(backupDir, { recursive: true });
+  const backupPath = path.join(backupDir, path.basename(analysis.excelPath));
+  await fsp.copyFile(analysis.excelPath, backupPath);
+
+  let insertAt = Math.max(analysis.roster.headerRow + 1, ...analysis.rosterRows.map((row) => row.rowNumber)) + 1;
+  const styleSourceRow = sheet.getRow(insertAt - 1);
+  for (const name of names) {
+    const row = sheet.insertRow(insertAt, []);
+    row.height = styleSourceRow.height;
+    for (let column = 1; column <= sheet.columnCount; column += 1) {
+      row.getCell(column).style = { ...styleSourceRow.getCell(column).style };
+    }
+    row.getCell(analysis.roster.nameColumn + 1).value = name;
+    if (analysis.roster.resultColumn >= 0) row.getCell(analysis.roster.resultColumn + 1).value = null;
+    insertAt += 1;
+  }
+  await workbook.xlsx.writeFile(analysis.excelPath);
+  return { appended: names.length, backupPath };
 }
 
 module.exports = {
   analyzeImport,
+  appendRosterRows,
   commitImport,
   inspectWorkbook,
   listFilesRecursive,
+  resolveBindings,
   resolveUserPath,
   uniqueNameMatch
 };

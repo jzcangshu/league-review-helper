@@ -12,8 +12,10 @@
         <header class="top-bar">
           <div>
             <div class="eyebrow">入团志愿书审核工具</div>
-            <h1 id="studentTitle">加载中</h1>
-            <p id="studentMeta" class="meta"></p>
+            <div class="student-heading-line">
+              <h1 id="studentTitle">加载中</h1>
+              <p id="studentMeta" class="meta"></p>
+            </div>
           </div>
           <div class="nav-actions">
             <button id="prevButton" type="button">上一个</button>
@@ -32,8 +34,14 @@
           </div>
 
           <div id="importBody" class="import-body" hidden>
+            <div id="importProgress" class="import-progress" aria-label="资料导入进度">
+              <span data-step="1">1 资料文件夹</span>
+              <span data-step="2">2 Excel 名单</span>
+              <span data-step="3">3 核对资料</span>
+              <span data-step="4">4 确认导入</span>
+            </div>
             <div id="importStep1" class="import-step">
-              <div class="step-title">1. 选择团员 PDF 资料文件夹</div>
+              <div class="step-title">选择存放团员 PDF 的文件夹</div>
               <div class="import-row">
                 <select id="candidateSelect" aria-label="候选资料文件夹"></select>
                 <button id="pickPdfFolderButton" type="button">选择文件夹</button>
@@ -43,7 +51,7 @@
             </div>
 
             <div id="importStep2" class="import-step" hidden>
-              <div class="step-title">2. 选择团员名单 Excel</div>
+              <div class="step-title">选择学校提供的团员名单 Excel</div>
               <div class="import-row">
                 <div id="excelPathPreview" class="path-box">尚未选择</div>
                 <button id="pickExcelButton" type="button">选择文件</button>
@@ -53,7 +61,7 @@
             </div>
 
             <div id="importStep3" class="import-step" hidden>
-              <div class="step-title">3. 确认学校并检查资料</div>
+              <div class="step-title">确认学校名称并核对名单与资料</div>
               <div class="import-row">
                 <input id="schoolNameInput" type="text" placeholder="学校名称" />
                 <select id="resultColumnSelect" aria-label="历史审核结果列" hidden></select>
@@ -64,7 +72,7 @@
             </div>
 
             <div id="importStep4" class="import-step" hidden>
-              <div class="step-title">4. 检查完成</div>
+              <div class="step-title">核对完成，确认后开始审核</div>
               <div class="import-row result-row">
                 <div id="analysisSummary" class="analysis-summary"></div>
                 <button id="viewIssuesButton" type="button">查看差异</button>
@@ -76,16 +84,16 @@
         </section>
 
         <section class="panel roster-panel">
-          <div class="panel-head">
+          <div class="panel-head roster-heading">
             <label for="studentSelect">当前名单</label>
-            <div class="roster-select-row">
-              <select id="schoolSelect" aria-label="学校筛选"></select>
-              <select id="studentSelect" aria-label="学生选择"></select>
+            <div class="status-row">
+              <span id="pdfStatus" class="badge">PDF</span>
+              <span id="saveStatus" class="save-status">未修改</span>
             </div>
           </div>
-          <div class="status-row">
-            <span id="pdfStatus" class="badge">PDF</span>
-            <span id="saveStatus" class="save-status">未修改</span>
+          <div class="roster-select-row">
+            <select id="schoolSelect" aria-label="学校筛选"></select>
+            <select id="studentSelect" aria-label="学生选择"></select>
           </div>
         </section>
 
@@ -93,6 +101,7 @@
           <div class="panel-head">
             <label for="reviewText">审核结果</label>
             <div class="editor-actions">
+              <button id="reviewStateButton" class="small-button" type="button">确认无问题</button>
               <button id="appendSeparatorButton" type="button">插入分号</button>
               <button id="saveButton" type="button" class="primary">保存</button>
             </div>
@@ -154,8 +163,12 @@
     <dialog id="issuesDialog" class="compact-dialog">
       <div class="dialog-head">
         <strong>资料核对与历史结果冲突</strong>
-        <button id="closeIssuesDialogButton" class="icon-button" type="button">×</button>
+        <div class="dialog-head-actions">
+          <button id="copyReportButton" class="small-button" type="button">复制核对报告</button>
+          <button id="closeIssuesDialogButton" class="icon-button" type="button">×</button>
+        </div>
       </div>
+      <div class="dialog-guidance">疑似姓名请打开 PDF 核对首页手写姓名，再选择对应名单人员；若确为不同人员，选择“作为新人员加入 Excel”。</div>
       <div id="issueSummary" class="dialog-scroll"></div>
     </dialog>
 

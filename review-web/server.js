@@ -3,11 +3,13 @@ const fsp = require("node:fs/promises");
 const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
 const { URL } = require("node:url");
 
 const { analyzeImport, commitImport, listFilesRecursive } = require("./lib/import-service");
+const { isExplicitlyReviewed, loadReviewStatus, setReviewed } = require("./lib/review-status");
 const {
   isSchoolActive,
   migrateSource,
@@ -244,6 +246,7 @@ async function buildDataset() {
   const pdfBySchool = await buildPdfMap(sources);
   const reviewFiles = fs.existsSync(reviewRoot) ? await listFilesRecursive(reviewRoot, ".txt") : [];
   const items = [];
+  const statuses = new Map();
 
   for (const reviewPath of localeSort(reviewFiles)) {
     const relativeReview = path.relative(reviewRoot, reviewPath);
@@ -260,7 +263,9 @@ async function buildDataset() {
       }
     }
     const content = await fsp.readFile(reviewPath, "utf8").catch(() => "");
-    items.push({ school, studentName, reviewPath, pdfPath: bestPdfPath, matchScore: bestScore, reviewed: Boolean(content.trim()) });
+    if (!statuses.has(school)) statuses.set(school, await loadReviewStatus(path.join(reviewRoot, school)));
+    const reviewed = Boolean(content.trim()) || isExplicitlyReviewed(statuses.get(school), studentName);
+    items.push({ school, studentName, reviewPath, pdfPath: bestPdfPath, matchScore: bestScore, reviewed });
   }
 
   items.sort((left, right) => {
@@ -337,6 +342,7 @@ function suggestSchool(pdfDir) {
 async function start() {
   await fsp.mkdir(reviewRoot, { recursive: true });
   let dataset = await buildDataset();
+  const importAnalyses = new Map();
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -390,20 +396,35 @@ async function start() {
           excelPath: resolveStoredPath(body.excelPath),
           resultColumn: body.resultColumn || ""
         });
+        const analysisId = crypto.randomUUID();
+        importAnalyses.set(analysisId, analysis);
+        while (importAnalyses.size > 20) importAnalyses.delete(importAnalyses.keys().next().value);
         sendJson(res, 200, {
           ...analysis,
+          analysisId,
           workspaceRoot: undefined,
           reviewRoot: undefined,
+          rosterRows: undefined,
           items: analysis.items.map((item) => ({
+            pdfIndex: item.pdfIndex,
             name: item.name,
             excelName: item.excelName,
             matchKind: item.matchKind,
             matchCandidates: item.matchCandidates,
             excelResult: item.excelResult,
             txtContent: item.txtContent,
-            conflict: item.conflict
+            conflict: item.conflict,
+            pdfPreviewUrl: `/api/import/analysis/${encodeURIComponent(analysisId)}/pdf/${item.pdfIndex}`
           }))
         });
+        return;
+      }
+      const importPdfMatch = pathname.match(/^\/api\/import\/analysis\/([^/]+)\/pdf\/(\d+)$/);
+      if (req.method === "GET" && importPdfMatch) {
+        const analysis = importAnalyses.get(decodeURIComponent(importPdfMatch[1]));
+        const item = analysis?.items.find((entry) => entry.pdfIndex === Number(importPdfMatch[2]));
+        if (!item?.pdfPath) return sendJson(res, 404, { error: "这份待核对 PDF 已失效，请重新检查资料。" });
+        await serveFile(res, item.pdfPath);
         return;
       }
       if (req.method === "POST" && pathname === "/api/import/commit") {
@@ -411,15 +432,19 @@ async function start() {
         const pdfDir = resolveStoredPath(body.pdfDir);
         const excelPath = resolveStoredPath(body.excelPath);
         const school = String(body.school || "").trim() || suggestSchool(pdfDir);
-        const analysis = await analyzeImport({
-          workspaceRoot,
-          reviewRoot,
-          school,
-          pdfDir,
-          excelPath,
-          resultColumn: body.resultColumn || ""
+        const analysis = importAnalyses.get(body.analysisId) || await analyzeImport({
+            workspaceRoot,
+            reviewRoot,
+            school,
+            pdfDir,
+            excelPath,
+            resultColumn: body.resultColumn || ""
+          });
+        const result = await commitImport({
+          analysis,
+          bindings: body.bindings || {},
+          resolutions: body.resolutions || {}
         });
-        const result = await commitImport({ analysis, resolutions: body.resolutions || {} });
         const now = new Date().toISOString();
         const source = await upsertSource({
           id: body.sourceId || stableSourceId(school, toStoredPath(pdfDir)),
@@ -431,6 +456,7 @@ async function start() {
           updatedAt: now
         });
         dataset = await buildDataset();
+        if (body.analysisId) importAnalyses.delete(body.analysisId);
         sendJson(res, 200, { ok: true, source: publicSource(source), ...result, summary: analysis.summary });
         return;
       }
@@ -457,16 +483,24 @@ async function start() {
       if (req.method === "GET" && pathname.startsWith("/api/review/")) {
         const item = dataset.items.find((entry) => entry.id === pathname.slice("/api/review/".length));
         if (!item) return sendJson(res, 404, { error: "未找到这份审核记录。" });
-        sendJson(res, 200, { id: item.id, content: await fsp.readFile(item.reviewPath, "utf8").catch(() => "") });
+        sendJson(res, 200, {
+          id: item.id,
+          content: await fsp.readFile(item.reviewPath, "utf8").catch(() => ""),
+          reviewed: item.reviewed
+        });
         return;
       }
       if (req.method === "PUT" && pathname.startsWith("/api/review/")) {
         const item = dataset.items.find((entry) => entry.id === pathname.slice("/api/review/".length));
         if (!item) return sendJson(res, 404, { error: "未找到这份审核记录。" });
         const body = await readRequestBody(req);
-        await fsp.writeFile(item.reviewPath, typeof body.content === "string" ? body.content : "", "utf8");
-        item.reviewed = Boolean(String(body.content || "").trim());
-        sendJson(res, 200, { ok: true, savedAt: new Date().toISOString() });
+        const content = typeof body.content === "string" ? body.content : "";
+        const reviewed = body.reviewed !== false;
+        if (!reviewed && content.trim()) return sendJson(res, 400, { error: "有审核意见时不能标记为未审核。" });
+        await fsp.writeFile(item.reviewPath, content, "utf8");
+        await setReviewed(path.dirname(item.reviewPath), item.studentName, reviewed);
+        item.reviewed = reviewed || Boolean(content.trim());
+        sendJson(res, 200, { ok: true, reviewed: item.reviewed, savedAt: new Date().toISOString() });
         return;
       }
       const pdfMatch = pathname.match(/^\/api\/pdf\/([^/]+)(\/download)?$/);
