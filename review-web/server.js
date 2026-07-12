@@ -322,15 +322,19 @@ async function readRequestBody(req) {
 
 function runPowerShellPicker(kind) {
   const isFolder = kind === "folder";
+  const owner = `$owner=New-Object System.Windows.Forms.Form; $owner.TopMost=$true; $owner.ShowInTaskbar=$false; $owner.StartPosition='CenterScreen'; $owner.Opacity=0; $owner.Show();`;
   const script = isFolder
-    ? `Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='选择团员 PDF 资料所在文件夹'; if($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){[Console]::OutputEncoding=[Text.Encoding]::UTF8; Write-Output $d.SelectedPath}`
-    : `Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.OpenFileDialog; $d.Title='选择团员名单 Excel'; $d.Filter='Excel 文件 (*.xlsx;*.xlsm)|*.xlsx;*.xlsm'; if($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){[Console]::OutputEncoding=[Text.Encoding]::UTF8; Write-Output $d.FileName}`;
+    ? `Add-Type -AssemblyName System.Windows.Forms; ${owner} $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='选择团员 PDF 资料所在文件夹'; $result=$d.ShowDialog($owner); $owner.Close(); if($result -eq [System.Windows.Forms.DialogResult]::OK){[Console]::OutputEncoding=[Text.Encoding]::UTF8; Write-Output $d.SelectedPath}`
+    : `Add-Type -AssemblyName System.Windows.Forms; ${owner} $d=New-Object System.Windows.Forms.OpenFileDialog; $d.Title='选择团员名单 Excel'; $d.Filter='Excel 文件 (*.xlsx;*.xlsm)|*.xlsx;*.xlsm'; $result=$d.ShowDialog($owner); $owner.Close(); if($result -eq [System.Windows.Forms.DialogResult]::OK){[Console]::OutputEncoding=[Text.Encoding]::UTF8; Write-Output $d.FileName}`;
   const encoded = Buffer.from(script, "utf16le").toString("base64");
   return execFileAsync("powershell.exe", ["-NoProfile", "-STA", "-EncodedCommand", encoded], {
-    windowsHide: true,
+    windowsHide: false,
     encoding: "utf8",
     timeout: 120000
-  }).then(({ stdout }) => stdout.trim());
+  }).then(({ stdout }) => stdout.trim()).catch((error) => {
+    const detail = String(error?.stderr || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    throw new Error(detail ? `系统选择窗口打开失败：${detail}` : "系统选择窗口打开失败，请重新启动审核工具后再试。");
+  });
 }
 
 function suggestSchool(pdfDir) {

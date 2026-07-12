@@ -170,7 +170,11 @@ async function changeSourceState(source) {
 
 async function choosePath(kind) {
   const button = kind === "folder" ? elements.pickPdfFolderButton : elements.pickExcelButton;
+  const originalText = button.textContent;
   button.disabled = true;
+  button.textContent = "正在打开...";
+  if (kind === "folder") elements.pdfPathPreview.textContent = "正在等待选择文件夹";
+  else elements.excelPathPreview.textContent = "正在等待选择文件";
   try {
     const payload = await api(`/api/picker/${kind}`, { method: "POST" });
     if (!payload.path) return false;
@@ -188,6 +192,7 @@ async function choosePath(kind) {
     return false;
   } finally {
     button.disabled = false;
+    button.textContent = originalText;
   }
 }
 
