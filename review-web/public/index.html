@@ -21,7 +21,61 @@
           </div>
         </header>
 
-        <section class="panel">
+        <section class="panel import-panel">
+          <div class="panel-head compact-head">
+            <span>资料准备</span>
+            <div class="compact-actions">
+              <span id="importStatus" class="hint">未配置</span>
+              <button id="manageSchoolsButton" class="small-button" type="button">学校管理</button>
+              <button id="toggleImportButton" class="small-button" type="button">展开</button>
+            </div>
+          </div>
+
+          <div id="importBody" class="import-body" hidden>
+            <div id="importStep1" class="import-step">
+              <div class="step-title">1. 选择团员 PDF 资料文件夹</div>
+              <div class="import-row">
+                <select id="candidateSelect" aria-label="候选资料文件夹"></select>
+                <button id="pickPdfFolderButton" type="button">选择文件夹</button>
+                <button id="toImportStep2Button" class="primary" type="button">下一步</button>
+              </div>
+              <div id="pdfPathPreview" class="path-preview">尚未选择</div>
+            </div>
+
+            <div id="importStep2" class="import-step" hidden>
+              <div class="step-title">2. 选择团员名单 Excel</div>
+              <div class="import-row">
+                <div id="excelPathPreview" class="path-box">尚未选择</div>
+                <button id="pickExcelButton" type="button">选择文件</button>
+                <button id="backToImportStep1Button" type="button">上一步</button>
+                <button id="toImportStep3Button" class="primary" type="button">下一步</button>
+              </div>
+            </div>
+
+            <div id="importStep3" class="import-step" hidden>
+              <div class="step-title">3. 确认学校并检查资料</div>
+              <div class="import-row">
+                <input id="schoolNameInput" type="text" placeholder="学校名称" />
+                <select id="resultColumnSelect" aria-label="历史审核结果列" hidden></select>
+                <button id="backToImportStep2Button" type="button">上一步</button>
+                <button id="analyzeImportButton" class="primary" type="button">检查资料</button>
+              </div>
+              <div id="importMessage" class="path-preview"></div>
+            </div>
+
+            <div id="importStep4" class="import-step" hidden>
+              <div class="step-title">4. 检查完成</div>
+              <div class="import-row result-row">
+                <div id="analysisSummary" class="analysis-summary"></div>
+                <button id="viewIssuesButton" type="button">查看差异</button>
+                <button id="backToImportStep3Button" type="button">上一步</button>
+                <button id="commitImportButton" class="primary" type="button">确认导入</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel roster-panel">
           <div class="panel-head">
             <label for="studentSelect">当前名单</label>
             <div class="roster-select-row">
@@ -32,19 +86,6 @@
           <div class="status-row">
             <span id="pdfStatus" class="badge">PDF</span>
             <span id="saveStatus" class="save-status">未修改</span>
-          </div>
-        </section>
-
-        <section class="panel import-panel">
-          <div class="panel-head">
-            <span>导入资料文件夹</span>
-            <span id="importStatus" class="hint">未导入</span>
-          </div>
-          <div class="import-grid">
-            <select id="candidateSelect" aria-label="候选资料文件夹"></select>
-            <input id="schoolNameInput" type="text" placeholder="学校名称" />
-            <input id="folderPathInput" type="text" placeholder="资料文件夹路径，支持工作区相对路径" />
-            <button id="importButton" type="button">导入</button>
           </div>
         </section>
 
@@ -66,6 +107,7 @@
         <section class="panel notes-panel">
           <div class="panel-head">
             <span>审核注意事项</span>
+            <button id="editNotesButton" class="small-button" type="button">编辑</button>
           </div>
           <ol id="noteList" class="note-list"></ol>
         </section>
@@ -81,18 +123,62 @@
 
       <main class="right-pane">
         <div class="pdf-toolbar">
-          <span id="pdfLabel">PDF 预览</span>
-          <span id="matchInfo" class="hint"></span>
+          <div>
+            <span id="pdfLabel">PDF 预览</span>
+            <span id="matchInfo" class="hint"></span>
+          </div>
+          <div class="pdf-controls">
+            <button id="prevPageButton" class="icon-button" type="button" title="上一页">↑</button>
+            <span id="pageIndicator">0 / 0</span>
+            <button id="nextPageButton" class="icon-button" type="button" title="下一页">↓</button>
+            <button id="zoomOutButton" class="icon-button" type="button" title="缩小">−</button>
+            <span id="zoomIndicator">100%</span>
+            <button id="zoomInButton" class="icon-button" type="button" title="放大">＋</button>
+            <button id="rotateButton" class="icon-button" type="button" title="旋转">↻</button>
+            <button id="downloadButton" class="small-button" type="button">下载</button>
+          </div>
         </div>
-        <div class="pdf-stage">
-          <iframe id="pdfFrame" title="PDF 预览"></iframe>
-          <div id="pdfEmpty" class="pdf-empty" hidden>
-            <p>当前审核结果没有匹配到 PDF。</p>
+        <div class="pdf-workspace">
+          <aside id="pdfThumbnails" class="pdf-thumbnails" aria-label="PDF 页面缩略图"></aside>
+          <div id="pdfStage" class="pdf-stage">
+            <canvas id="pdfCanvas" hidden></canvas>
+            <div id="pdfLoading" class="pdf-empty" hidden>正在打开资料</div>
+            <div id="pdfEmpty" class="pdf-empty">
+              <p>当前没有可预览的 PDF。</p>
+            </div>
           </div>
         </div>
       </main>
     </div>
 
-    <script src="/app.js"></script>
+    <dialog id="issuesDialog" class="compact-dialog">
+      <div class="dialog-head">
+        <strong>资料核对与历史结果冲突</strong>
+        <button id="closeIssuesDialogButton" class="icon-button" type="button">×</button>
+      </div>
+      <div id="issueSummary" class="dialog-scroll"></div>
+    </dialog>
+
+    <dialog id="schoolsDialog" class="compact-dialog">
+      <div class="dialog-head">
+        <strong>已导入学校</strong>
+        <button id="closeSchoolsDialogButton" class="icon-button" type="button">×</button>
+      </div>
+      <div id="sourceList" class="dialog-scroll"></div>
+    </dialog>
+
+    <dialog id="notesDialog" class="compact-dialog notes-dialog">
+      <div class="dialog-head">
+        <strong>编辑审核注意事项</strong>
+        <button id="closeNotesDialogButton" class="icon-button" type="button">×</button>
+      </div>
+      <textarea id="notesEditor" spellcheck="false"></textarea>
+      <div class="dialog-actions">
+        <span id="notesMessage" class="hint"></span>
+        <button id="saveNotesButton" class="primary" type="button">保存</button>
+      </div>
+    </dialog>
+
+    <script type="module" src="/app.js"></script>
   </body>
 </html>

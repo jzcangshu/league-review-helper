@@ -3,20 +3,34 @@ const fsp = require("node:fs/promises");
 const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
+const { execFile } = require("node:child_process");
+const { promisify } = require("node:util");
 const { URL } = require("node:url");
 
+const { analyzeImport, commitImport, listFilesRecursive } = require("./lib/import-service");
+const {
+  isSchoolActive,
+  migrateSource,
+  normalizeStudentName,
+  stableSourceId,
+  updateSourceState
+} = require("./lib/review-data");
+
+const execFileAsync = promisify(execFile);
 const appRoot = __dirname;
 const workspaceRoot = path.resolve(appRoot, "..");
 const reviewRoot = path.join(workspaceRoot, "审核结果");
+const reviewHistoryRoot = path.join(workspaceRoot, "审核结果历史");
+const notesHistoryRoot = path.join(workspaceRoot, "注意事项历史");
 const notesPath = path.join(workspaceRoot, "注意事项.txt");
 const publicRoot = path.join(appRoot, "public");
-const sourcesPath = path.join(appRoot, "sources.json");
+const sourcesTemplatePath = path.join(appRoot, "sources.json");
+const sourcesLocalPath = path.join(appRoot, "sources.local.json");
+const pdfJsRoot = path.join(appRoot, "node_modules", "pdfjs-dist", "build");
 const host = "127.0.0.1";
 const preferredPort = 4173;
 const portFilePath = path.join(os.tmpdir(), "review-web-port.json");
 const fallbackPortFilePath = path.join(appRoot, "review-web-port.txt");
-
-fs.mkdirSync(path.dirname(portFilePath), { recursive: true });
 
 function sendJson(res, status, data) {
   res.writeHead(status, {
@@ -27,33 +41,18 @@ function sendJson(res, status, data) {
 }
 
 function sendText(res, status, text, type = "text/plain; charset=utf-8") {
-  res.writeHead(status, {
-    "Content-Type": type,
-    "Cache-Control": "no-store"
-  });
+  res.writeHead(status, { "Content-Type": type, "Cache-Control": "no-store" });
   res.end(text);
 }
 
 function writePortFile(port) {
-  const payload = `${JSON.stringify({
-    port,
-    pid: process.pid,
-    startedAt: new Date().toISOString()
-  }, null, 2)}\n`;
-
+  const payload = `${JSON.stringify({ port, pid: process.pid, startedAt: new Date().toISOString() }, null, 2)}\n`;
   for (const targetPath of [portFilePath, fallbackPortFilePath]) {
     try {
       fs.mkdirSync(path.dirname(targetPath), { recursive: true });
       fs.writeFileSync(targetPath, payload, "utf8");
-      return targetPath;
     } catch {}
   }
-  return null;
-}
-
-function ensureInsideRoot(rootPath, targetPath) {
-  const relative = path.relative(rootPath, targetPath);
-  return relative && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
 function isInsideOrEqual(rootPath, targetPath) {
@@ -61,357 +60,278 @@ function isInsideOrEqual(rootPath, targetPath) {
   return !relative || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-async function listFilesRecursive(rootPath, extension) {
-  const files = [];
-
-  async function walk(currentPath) {
-    const entries = await fsp.readdir(currentPath, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(currentPath, entry.name);
-      if (entry.isDirectory()) {
-        await walk(fullPath);
-        continue;
-      }
-      if (entry.isFile() && fullPath.toLowerCase().endsWith(extension)) {
-        files.push(fullPath);
-      }
-    }
-  }
-
-  await walk(rootPath);
-  return files;
-}
-
 function localeSort(values) {
-  return values.sort((a, b) =>
-    a.localeCompare(b, "zh-Hans-CN", { numeric: true, sensitivity: "base" })
+  return values.sort((left, right) =>
+    left.localeCompare(right, "zh-Hans-CN", { numeric: true, sensitivity: "base" })
   );
 }
 
-function stripExtension(filePath) {
-  return path.basename(filePath, path.extname(filePath));
+function toStoredPath(targetPath) {
+  const resolved = path.resolve(targetPath);
+  return isInsideOrEqual(workspaceRoot, resolved) ? path.relative(workspaceRoot, resolved) : resolved;
 }
 
-function normalizeStudentName(input, school = "") {
-  const chineseOnly = (input.match(/[\u4e00-\u9fa5]+/g) || []).join("");
-  const withoutSchool = school ? chineseOnly.replaceAll(school, "") : chineseOnly;
-  return withoutSchool
-    .replace(/入团志愿书|入团申请书|入团申请|审核结果|团员资料|转PDF/g, "")
-    .replace(/班/g, "")
-    .trim();
+function resolveStoredPath(inputPath) {
+  const value = String(inputPath || "").trim();
+  if (!value) throw new Error("资料位置为空，请重新选择。");
+  return path.isAbsolute(value) ? path.resolve(value) : path.resolve(workspaceRoot, value);
 }
 
-function buildShortName(filePath, school = "") {
-  const baseName = stripExtension(filePath);
-  return normalizeStudentName(baseName, school);
-}
-
-function scoreCandidate(studentName, pdfPath, school = "") {
-  const pdfName = buildShortName(pdfPath, school);
-  if (!pdfName) {
-    return 0;
-  }
-  if (pdfName === studentName) {
-    return 100;
-  }
-  if (pdfName.includes(studentName) || studentName.includes(pdfName)) {
-    return 80;
-  }
-  const rawBase = stripExtension(pdfPath).replace(/[\s_-]+/g, "");
-  if (rawBase.includes(studentName)) {
-    return 60;
-  }
-  return 0;
-}
-
-function getNoticeLines(rawText) {
-  const rawLines = rawText
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  if (rawLines[0] && rawLines[0].includes("第一条我删了")) {
-    rawLines.shift();
-  }
-  return rawLines;
-}
-
-async function loadSources() {
+async function readSourceFile(filePath) {
   try {
-    const raw = await fsp.readFile(sourcesPath, "utf8");
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed
-      .filter((source) => source && typeof source.school === "string" && typeof source.folderRelativePath === "string")
-      .map((source) => ({
-        school: source.school.trim(),
-        folderRelativePath: source.folderRelativePath.replaceAll("/", path.sep)
-      }))
-      .filter((source) => source.school && source.folderRelativePath);
+    const parsed = JSON.parse(await fsp.readFile(filePath, "utf8"));
+    return Array.isArray(parsed) ? parsed.map(migrateSource).filter((source) => source.school) : [];
   } catch (error) {
-    if (error && error.code === "ENOENT") {
-      return [];
-    }
+    if (error?.code === "ENOENT") return [];
     throw error;
   }
 }
 
+function mergeSources(baseSources, localSources) {
+  const merged = new Map();
+  for (const source of [...baseSources, ...localSources]) {
+    const migrated = migrateSource(source);
+    const key = migrated.id || stableSourceId(migrated.school, migrated.folderPath);
+    const duplicateKey = [...merged.entries()].find(([, existing]) =>
+      existing.school === migrated.school ||
+      String(existing.folderPath).toLowerCase() === String(migrated.folderPath).toLowerCase()
+    )?.[0];
+    if (duplicateKey) merged.delete(duplicateKey);
+    merged.set(key, migrated);
+  }
+  return [...merged.values()];
+}
+
+async function loadSources() {
+  return mergeSources(await readSourceFile(sourcesTemplatePath), await readSourceFile(sourcesLocalPath));
+}
+
 async function saveSources(sources) {
-  const normalized = [];
-  const seen = new Set();
-  for (const source of sources) {
-    const school = String(source.school || "").trim();
-    const folderRelativePath = String(source.folderRelativePath || "").trim().replaceAll("/", path.sep);
-    if (!school || !folderRelativePath) {
-      continue;
-    }
-    const key = `${school}\n${folderRelativePath.toLowerCase()}`;
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    normalized.push({ school, folderRelativePath });
-  }
-  await fsp.writeFile(sourcesPath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  const normalized = sources.map(migrateSource).map((source) => ({
+    ...source,
+    folderRelativePath: source.folderPath
+  }));
+  await fsp.writeFile(sourcesLocalPath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
 }
 
-function resolveWorkspacePath(inputPath) {
-  const rawPath = String(inputPath || "").trim();
-  if (!rawPath) {
-    throw new Error("请填写资料文件夹路径。");
-  }
-  const normalizedInput = rawPath.replace(/^["']|["']$/g, "");
-  const resolvedPath = path.isAbsolute(normalizedInput)
-    ? path.resolve(normalizedInput)
-    : path.resolve(workspaceRoot, normalizedInput);
-  if (!isInsideOrEqual(workspaceRoot, resolvedPath)) {
-    throw new Error("资料文件夹必须在当前工作区内。");
-  }
-  return resolvedPath;
+async function upsertSource(nextSource) {
+  const sources = await loadSources();
+  const migrated = migrateSource(nextSource);
+  const next = sources.filter((source) =>
+    source.id !== migrated.id &&
+    source.school !== migrated.school &&
+    String(source.folderPath).toLowerCase() !== String(migrated.folderPath).toLowerCase()
+  );
+  next.push(migrated);
+  await saveSources(next);
+  return migrated;
 }
 
-async function ensureReviewFilesForSource(source) {
-  const folderPath = resolveWorkspacePath(source.folderRelativePath);
-  const stats = await fsp.stat(folderPath).catch(() => null);
-  if (!stats || !stats.isDirectory()) {
-    throw new Error(`资料文件夹不存在：${source.folderRelativePath}`);
-  }
-
-  const pdfFiles = localeSort(await listFilesRecursive(folderPath, ".pdf"));
-  if (!pdfFiles.length) {
-    throw new Error("资料文件夹里没有 PDF。");
-  }
-
-  const schoolReviewRoot = path.join(reviewRoot, source.school);
-  await fsp.mkdir(schoolReviewRoot, { recursive: true });
-
-  let created = 0;
-  let existing = 0;
-  for (const pdfPath of pdfFiles) {
-    const studentName = buildShortName(pdfPath, source.school);
-    if (!studentName) {
-      continue;
-    }
-    const reviewPath = path.join(schoolReviewRoot, `${studentName}_审核结果.txt`);
-    if (fs.existsSync(reviewPath)) {
-      existing += 1;
-      continue;
-    }
-    await fsp.writeFile(reviewPath, "", "utf8");
-    created += 1;
-  }
-
+function publicSource(source) {
+  const migrated = migrateSource(source);
+  const resolvedFolder = migrated.folderPath ? resolveStoredPath(migrated.folderPath) : "";
+  const resolvedExcel = migrated.excelPath ? resolveStoredPath(migrated.excelPath) : "";
   return {
-    pdfCount: pdfFiles.length,
-    created,
-    existing,
-    reviewDirRelativePath: path.relative(workspaceRoot, schoolReviewRoot)
+    ...migrated,
+    folderExists: Boolean(resolvedFolder && fs.existsSync(resolvedFolder)),
+    excelExists: Boolean(resolvedExcel && fs.existsSync(resolvedExcel))
   };
 }
 
-function addPdfToMap(pdfBySchool, seenPdfPaths, school, pdfPath) {
+async function discoverSourceFolders() {
+  const sources = await loadSources();
+  const known = new Set(sources.map((source) => path.resolve(resolveStoredPath(source.folderPath)).toLowerCase()));
+  const candidates = [];
+
+  async function walk(currentPath) {
+    if (
+      isInsideOrEqual(reviewRoot, currentPath) ||
+      isInsideOrEqual(reviewHistoryRoot, currentPath) ||
+      isInsideOrEqual(appRoot, currentPath) ||
+      [".git", ".codex", ".agents", "node_modules", "open-source"].includes(path.basename(currentPath))
+    ) return;
+    const entries = await fsp.readdir(currentPath, { withFileTypes: true }).catch(() => []);
+    const pdfCount = entries.filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".pdf")).length;
+    if (pdfCount) {
+      const relativePath = path.relative(workspaceRoot, currentPath);
+      candidates.push({
+        folderPath: relativePath,
+        suggestedSchool: suggestSchool(currentPath),
+        pdfCount,
+        imported: known.has(path.resolve(currentPath).toLowerCase())
+      });
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name !== "node_modules") await walk(path.join(currentPath, entry.name));
+    }
+  }
+
+  await walk(workspaceRoot);
+  return candidates.sort((left, right) =>
+    left.folderPath.localeCompare(right.folderPath, "zh-Hans-CN", { numeric: true, sensitivity: "base" })
+  );
+}
+
+function addPdf(pdfBySchool, seen, school, pdfPath) {
   const key = path.resolve(pdfPath).toLowerCase();
-  if (seenPdfPaths.has(key)) {
-    return;
-  }
-  seenPdfPaths.add(key);
-  if (!pdfBySchool.has(school)) {
-    pdfBySchool.set(school, []);
-  }
+  if (seen.has(key)) return;
+  seen.add(key);
+  if (!pdfBySchool.has(school)) pdfBySchool.set(school, []);
   pdfBySchool.get(school).push(pdfPath);
 }
 
 async function buildPdfMap(sources) {
   const pdfBySchool = new Map();
-  const seenPdfPaths = new Set();
-  const importedFolders = [];
-
-  for (const source of sources) {
-    const folderPath = resolveWorkspacePath(source.folderRelativePath);
+  const seen = new Set();
+  const importedRoots = [];
+  for (const source of sources.filter((entry) => entry.active && entry.folderPath)) {
+    const folderPath = resolveStoredPath(source.folderPath);
     const stats = await fsp.stat(folderPath).catch(() => null);
-    if (!stats || !stats.isDirectory()) {
-      continue;
-    }
-    importedFolders.push(folderPath);
-    const pdfFiles = localeSort(await listFilesRecursive(folderPath, ".pdf"));
-    for (const pdfPath of pdfFiles) {
-      addPdfToMap(pdfBySchool, seenPdfPaths, source.school, pdfPath);
+    if (!stats?.isDirectory()) continue;
+    importedRoots.push(folderPath);
+    for (const pdfPath of await listFilesRecursive(folderPath, ".pdf")) {
+      addPdf(pdfBySchool, seen, source.school, pdfPath);
     }
   }
 
-  const workspacePdfFiles = localeSort(
-    (await listFilesRecursive(workspaceRoot, ".pdf")).filter((filePath) => !isInsideOrEqual(reviewRoot, filePath))
-  );
-  for (const pdfPath of workspacePdfFiles) {
-    if (importedFolders.some((folderPath) => isInsideOrEqual(folderPath, pdfPath))) {
-      continue;
-    }
-    const relativePath = path.relative(workspaceRoot, pdfPath);
-    const school = relativePath.split(path.sep)[0];
-    addPdfToMap(pdfBySchool, seenPdfPaths, school, pdfPath);
+  const workspacePdfs = await listFilesRecursive(workspaceRoot, ".pdf", {
+    skipDirectoryNames: ["node_modules", ".git", ".codex", ".agents", "open-source"],
+    skipPaths: [reviewRoot, reviewHistoryRoot, appRoot]
+  });
+  for (const pdfPath of workspacePdfs) {
+    if (
+      isInsideOrEqual(reviewRoot, pdfPath) ||
+      isInsideOrEqual(reviewHistoryRoot, pdfPath) ||
+      isInsideOrEqual(appRoot, pdfPath) ||
+      importedRoots.some((root) => isInsideOrEqual(root, pdfPath))
+    ) continue;
+    const school = path.relative(workspaceRoot, pdfPath).split(path.sep)[0];
+    if (isSchoolActive(school, sources)) addPdf(pdfBySchool, seen, school, pdfPath);
   }
-
   return pdfBySchool;
 }
 
-async function discoverSourceFolders() {
-  const sources = await loadSources();
-  const imported = new Set(sources.map((source) => source.folderRelativePath.toLowerCase()));
-  const candidates = [];
+function scoreCandidate(studentName, pdfPath, school) {
+  const pdfName = normalizeStudentName(pdfPath, school);
+  if (pdfName === studentName) return 100;
+  if (pdfName.includes(studentName) || studentName.includes(pdfName)) return 80;
+  if (path.basename(pdfPath).replace(/[\s_-]+/g, "").includes(studentName)) return 60;
+  return 0;
+}
 
-  async function walk(currentPath) {
-    if (isInsideOrEqual(reviewRoot, currentPath) || isInsideOrEqual(appRoot, currentPath)) {
-      return;
-    }
+async function loadNotes() {
+  const raw = await fsp.readFile(notesPath, "utf8").catch(() => "");
+  const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines[0]?.includes("第一条我删了")) lines.shift();
+  return lines;
+}
 
-    const entries = await fsp.readdir(currentPath, { withFileTypes: true }).catch(() => []);
-    const pdfCount = entries.filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".pdf")).length;
-    if (pdfCount > 0) {
-      const relativePath = path.relative(workspaceRoot, currentPath);
-      const firstSegment = relativePath.split(path.sep)[0];
-      candidates.push({
-        folderRelativePath: relativePath,
-        suggestedSchool: firstSegment || path.basename(currentPath),
-        pdfCount,
-        imported: imported.has(relativePath.toLowerCase())
-      });
-    }
-
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name === ".git" || entry.name === "node_modules") {
-        continue;
-      }
-      await walk(path.join(currentPath, entry.name));
-    }
+async function saveNotes(lines) {
+  const normalized = Array.isArray(lines) ? lines.map((line) => String(line).trim()).filter(Boolean) : [];
+  if (!normalized.length) throw new Error("审核注意事项不能为空。");
+  const previous = await fsp.readFile(notesPath, "utf8").catch(() => "");
+  if (previous) {
+    await fsp.mkdir(notesHistoryRoot, { recursive: true });
+    const name = `${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+    await fsp.writeFile(path.join(notesHistoryRoot, name), previous, "utf8");
   }
-
-  await walk(workspaceRoot);
-  return candidates.sort((a, b) =>
-    a.folderRelativePath.localeCompare(b.folderRelativePath, "zh-Hans-CN", { numeric: true, sensitivity: "base" })
-  );
+  await fsp.writeFile(notesPath, `${normalized.join("\n")}\n`, "utf8");
+  return normalized;
 }
 
 async function buildDataset() {
   const sources = await loadSources();
-  const reviewFiles = localeSort(await listFilesRecursive(reviewRoot, ".txt"));
   const pdfBySchool = await buildPdfMap(sources);
+  const reviewFiles = fs.existsSync(reviewRoot) ? await listFilesRecursive(reviewRoot, ".txt") : [];
+  const items = [];
 
-  const reviewItems = [];
-  const matchedPdfPaths = new Set();
-
-  for (const reviewPath of reviewFiles) {
+  for (const reviewPath of localeSort(reviewFiles)) {
     const relativeReview = path.relative(reviewRoot, reviewPath);
     const school = relativeReview.split(path.sep)[0];
+    if (!isSchoolActive(school, sources)) continue;
     const studentName = path.basename(reviewPath, "_审核结果.txt");
-    const candidates = pdfBySchool.get(school) || [];
-
-    let bestPdfPath = null;
+    let bestPdfPath = "";
     let bestScore = 0;
-
-    for (const candidate of candidates) {
+    for (const candidate of pdfBySchool.get(school) || []) {
       const score = scoreCandidate(studentName, candidate, school);
       if (score > bestScore) {
-        bestScore = score;
         bestPdfPath = candidate;
+        bestScore = score;
       }
     }
-
-    if (bestPdfPath) {
-      matchedPdfPaths.add(bestPdfPath);
-    }
-
-    reviewItems.push({
-      id: String(reviewItems.length + 1),
-      school,
-      studentName,
-      reviewPath,
-      pdfPath: bestPdfPath,
-      pdfRelativePath: bestPdfPath ? path.relative(workspaceRoot, bestPdfPath) : null,
-      reviewRelativePath: path.relative(workspaceRoot, reviewPath),
-      matchScore: bestScore
-    });
+    const content = await fsp.readFile(reviewPath, "utf8").catch(() => "");
+    items.push({ school, studentName, reviewPath, pdfPath: bestPdfPath, matchScore: bestScore, reviewed: Boolean(content.trim()) });
   }
 
-  const matchedItems = reviewItems
-    .filter((item) => item.pdfPath)
-    .sort((a, b) => a.pdfRelativePath.localeCompare(b.pdfRelativePath, "zh-Hans-CN", { numeric: true, sensitivity: "base" }));
-  const unmatchedItems = reviewItems
-    .filter((item) => !item.pdfPath)
-    .sort((a, b) => {
-      const aKey = `${a.school}/${a.studentName}`;
-      const bKey = `${b.school}/${b.studentName}`;
-      return aKey.localeCompare(bKey, "zh-Hans-CN", { numeric: true, sensitivity: "base" });
-    });
+  items.sort((left, right) => {
+    const keyLeft = `${left.school}/${left.studentName}`;
+    const keyRight = `${right.school}/${right.studentName}`;
+    return keyLeft.localeCompare(keyRight, "zh-Hans-CN", { numeric: true, sensitivity: "base" });
+  });
+  items.forEach((item, index) => {
+    item.id = String(index + 1);
+    item.sequence = index + 1;
+  });
 
-  const orderedItems = [...matchedItems, ...unmatchedItems].map((item, index) => ({
-    ...item,
-    sequence: index + 1,
-    pdfUrl: item.pdfRelativePath
-      ? `/api/file?path=${encodeURIComponent(item.pdfRelativePath)}`
-      : null
-  }));
-
-  const notesRaw = await fsp.readFile(notesPath, "utf8");
-  const notes = getNoticeLines(notesRaw);
-
-  return {
-    generatedAt: new Date().toISOString(),
-    items: orderedItems,
-    notes
-  };
+  const schoolStats = {};
+  for (const item of items) {
+    schoolStats[item.school] ||= { total: 0, reviewed: 0, pending: 0, missingPdf: 0 };
+    schoolStats[item.school].total += 1;
+    schoolStats[item.school][item.reviewed ? "reviewed" : "pending"] += 1;
+    if (!item.pdfPath) schoolStats[item.school].missingPdf += 1;
+  }
+  return { generatedAt: new Date().toISOString(), items, notes: await loadNotes(), schoolStats, sources };
 }
 
 function getContentType(filePath) {
   const extension = path.extname(filePath).toLowerCase();
   if (extension === ".html") return "text/html; charset=utf-8";
-  if (extension === ".js") return "application/javascript; charset=utf-8";
+  if (extension === ".js" || extension === ".mjs") return "application/javascript; charset=utf-8";
   if (extension === ".css") return "text/css; charset=utf-8";
   if (extension === ".pdf") return "application/pdf";
   if (extension === ".txt") return "text/plain; charset=utf-8";
   return "application/octet-stream";
 }
 
-async function serveStaticFile(res, targetPath) {
+async function serveFile(res, filePath, disposition = "inline") {
   try {
-    const fileBuffer = await fsp.readFile(targetPath);
+    const stats = await fsp.stat(filePath);
     res.writeHead(200, {
-      "Content-Type": getContentType(targetPath),
+      "Content-Type": getContentType(filePath),
+      "Content-Length": stats.size,
+      "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(path.basename(filePath))}`,
       "Cache-Control": "no-store"
     });
-    res.end(fileBuffer);
-  } catch (error) {
+    fs.createReadStream(filePath).pipe(res);
+  } catch {
     sendText(res, 404, "Not found");
   }
 }
 
 async function readRequestBody(req) {
   const chunks = [];
-  for await (const chunk of req) {
-    chunks.push(chunk);
-  }
-  const bodyText = Buffer.concat(chunks).toString("utf8");
-  return bodyText ? JSON.parse(bodyText) : {};
+  for await (const chunk of req) chunks.push(chunk);
+  const text = Buffer.concat(chunks).toString("utf8");
+  return text ? JSON.parse(text) : {};
+}
+
+function runPowerShellPicker(kind) {
+  const isFolder = kind === "folder";
+  const script = isFolder
+    ? `Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='选择团员 PDF 资料所在文件夹'; if($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){[Console]::OutputEncoding=[Text.Encoding]::UTF8; Write-Output $d.SelectedPath}`
+    : `Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.OpenFileDialog; $d.Title='选择团员名单 Excel'; $d.Filter='Excel 文件 (*.xlsx;*.xlsm)|*.xlsx;*.xlsm'; if($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){[Console]::OutputEncoding=[Text.Encoding]::UTF8; Write-Output $d.FileName}`;
+  const encoded = Buffer.from(script, "utf16le").toString("base64");
+  return execFileAsync("powershell.exe", ["-NoProfile", "-STA", "-EncodedCommand", encoded], {
+    windowsHide: true,
+    encoding: "utf8",
+    timeout: 120000
+  }).then(({ stdout }) => stdout.trim());
+}
+
+function suggestSchool(pdfDir) {
+  const generic = new Set(["资料", "团员资料", "入团申请资料", "入团志愿书", "PDF"]);
+  const folder = path.basename(pdfDir);
+  return generic.has(folder) ? path.basename(path.dirname(pdfDir)) : folder;
 }
 
 async function start() {
@@ -423,144 +343,176 @@ async function start() {
       const requestUrl = new URL(req.url, `http://${host}:${preferredPort}`);
       const pathname = requestUrl.pathname;
 
+      if (req.method === "GET" && pathname === "/api/health") {
+        sendJson(res, 200, { ok: true, generatedAt: dataset.generatedAt, workspaceRoot });
+        return;
+      }
       if (req.method === "GET" && pathname === "/api/bootstrap") {
-        const items = dataset.items.map((item) => ({
-          id: item.id,
-          sequence: item.sequence,
-          school: item.school,
-          studentName: item.studentName,
-          pdfUrl: item.pdfUrl,
-          hasPdf: Boolean(item.pdfUrl),
-          reviewRelativePath: item.reviewRelativePath,
-          matchScore: item.matchScore
-        }));
         sendJson(res, 200, {
           generatedAt: dataset.generatedAt,
-          items,
-          notes: dataset.notes
+          notes: dataset.notes,
+          schoolStats: dataset.schoolStats,
+          items: dataset.items.map((item) => ({
+            id: item.id,
+            sequence: item.sequence,
+            school: item.school,
+            studentName: item.studentName,
+            hasPdf: Boolean(item.pdfPath),
+            reviewed: item.reviewed,
+            matchQuality: item.matchScore === 100 ? "准确" : item.pdfPath ? "需核对" : "未找到"
+          }))
         });
         return;
       }
-
       if (req.method === "GET" && pathname === "/api/sources") {
         sendJson(res, 200, {
-          sources: await loadSources(),
+          sources: (await loadSources()).map(publicSource),
           candidates: await discoverSourceFolders()
         });
         return;
       }
-
-      if (req.method === "POST" && pathname === "/api/sources/import") {
-        const body = await readRequestBody(req);
-        const school = String(body.school || "").trim();
-        const folderPath = resolveWorkspacePath(body.folderRelativePath);
-        if (!school) {
-          sendJson(res, 400, { error: "请填写学校名称。" });
-          return;
-        }
-        const source = {
-          school,
-          folderRelativePath: path.relative(workspaceRoot, folderPath)
-        };
-        const result = await ensureReviewFilesForSource(source);
-        const sources = await loadSources();
-        const nextSources = sources.filter(
-          (entry) =>
-            entry.school !== source.school &&
-            entry.folderRelativePath.toLowerCase() !== source.folderRelativePath.toLowerCase()
-        );
-        nextSources.push(source);
-        await saveSources(nextSources);
-        dataset = await buildDataset();
-        sendJson(res, 200, { ok: true, source, ...result });
+      if (req.method === "POST" && pathname === "/api/picker/folder") {
+        sendJson(res, 200, { path: await runPowerShellPicker("folder") });
         return;
       }
-
-      if (req.method === "GET" && pathname.startsWith("/api/review/")) {
-        const itemId = pathname.slice("/api/review/".length);
-        const item = dataset.items.find((entry) => entry.id === itemId);
-        if (!item) {
-          sendJson(res, 404, { error: "未找到对应审核结果文件。" });
-          return;
-        }
-        const content = await fsp.readFile(item.reviewPath, "utf8").catch(() => "");
+      if (req.method === "POST" && pathname === "/api/picker/excel") {
+        sendJson(res, 200, { path: await runPowerShellPicker("excel") });
+        return;
+      }
+      if (req.method === "POST" && pathname === "/api/import/analyze") {
+        const body = await readRequestBody(req);
+        const pdfDir = resolveStoredPath(body.pdfDir);
+        const analysis = await analyzeImport({
+          workspaceRoot,
+          reviewRoot,
+          school: String(body.school || "").trim() || suggestSchool(pdfDir),
+          pdfDir,
+          excelPath: resolveStoredPath(body.excelPath),
+          resultColumn: body.resultColumn || ""
+        });
         sendJson(res, 200, {
-          id: item.id,
-          studentName: item.studentName,
-          school: item.school,
-          content
+          ...analysis,
+          workspaceRoot: undefined,
+          reviewRoot: undefined,
+          items: analysis.items.map((item) => ({
+            name: item.name,
+            excelName: item.excelName,
+            matchKind: item.matchKind,
+            matchCandidates: item.matchCandidates,
+            excelResult: item.excelResult,
+            txtContent: item.txtContent,
+            conflict: item.conflict
+          }))
         });
         return;
       }
-
-      if (req.method === "PUT" && pathname.startsWith("/api/review/")) {
-        const itemId = pathname.slice("/api/review/".length);
-        const item = dataset.items.find((entry) => entry.id === itemId);
-        if (!item) {
-          sendJson(res, 404, { error: "未找到对应审核结果文件。" });
-          return;
-        }
+      if (req.method === "POST" && pathname === "/api/import/commit") {
         const body = await readRequestBody(req);
-        const content = typeof body.content === "string" ? body.content : "";
-        await fsp.writeFile(item.reviewPath, content, "utf8");
+        const pdfDir = resolveStoredPath(body.pdfDir);
+        const excelPath = resolveStoredPath(body.excelPath);
+        const school = String(body.school || "").trim() || suggestSchool(pdfDir);
+        const analysis = await analyzeImport({
+          workspaceRoot,
+          reviewRoot,
+          school,
+          pdfDir,
+          excelPath,
+          resultColumn: body.resultColumn || ""
+        });
+        const result = await commitImport({ analysis, resolutions: body.resolutions || {} });
+        const now = new Date().toISOString();
+        const source = await upsertSource({
+          id: body.sourceId || stableSourceId(school, toStoredPath(pdfDir)),
+          school,
+          folderPath: toStoredPath(pdfDir),
+          excelPath: toStoredPath(excelPath),
+          active: true,
+          createdAt: now,
+          updatedAt: now
+        });
+        dataset = await buildDataset();
+        sendJson(res, 200, { ok: true, source: publicSource(source), ...result, summary: analysis.summary });
+        return;
+      }
+      const sourceStateMatch = pathname.match(/^\/api\/sources\/([^/]+)\/(remove|restore)$/);
+      if (req.method === "POST" && sourceStateMatch) {
+        const sourceId = decodeURIComponent(sourceStateMatch[1]);
+        const active = sourceStateMatch[2] === "restore";
+        const sources = updateSourceState(await loadSources(), sourceId, active);
+        await saveSources(sources);
+        dataset = await buildDataset();
+        sendJson(res, 200, { ok: true, sources: sources.map(publicSource) });
+        return;
+      }
+      if (req.method === "GET" && pathname === "/api/notes") {
+        sendJson(res, 200, { notes: await loadNotes() });
+        return;
+      }
+      if (req.method === "PUT" && pathname === "/api/notes") {
+        const body = await readRequestBody(req);
+        dataset.notes = await saveNotes(body.notes);
+        sendJson(res, 200, { ok: true, notes: dataset.notes });
+        return;
+      }
+      if (req.method === "GET" && pathname.startsWith("/api/review/")) {
+        const item = dataset.items.find((entry) => entry.id === pathname.slice("/api/review/".length));
+        if (!item) return sendJson(res, 404, { error: "未找到这份审核记录。" });
+        sendJson(res, 200, { id: item.id, content: await fsp.readFile(item.reviewPath, "utf8").catch(() => "") });
+        return;
+      }
+      if (req.method === "PUT" && pathname.startsWith("/api/review/")) {
+        const item = dataset.items.find((entry) => entry.id === pathname.slice("/api/review/".length));
+        if (!item) return sendJson(res, 404, { error: "未找到这份审核记录。" });
+        const body = await readRequestBody(req);
+        await fsp.writeFile(item.reviewPath, typeof body.content === "string" ? body.content : "", "utf8");
+        item.reviewed = Boolean(String(body.content || "").trim());
         sendJson(res, 200, { ok: true, savedAt: new Date().toISOString() });
         return;
       }
-
-      if (req.method === "GET" && pathname === "/api/file") {
-        const relativePath = requestUrl.searchParams.get("path") || "";
-        const filePath = path.resolve(workspaceRoot, relativePath);
-        if (!ensureInsideRoot(workspaceRoot, filePath)) {
-          sendJson(res, 400, { error: "非法文件路径。" });
-          return;
-        }
-        await serveStaticFile(res, filePath);
+      const pdfMatch = pathname.match(/^\/api\/pdf\/([^/]+)(\/download)?$/);
+      if (req.method === "GET" && pdfMatch) {
+        const item = dataset.items.find((entry) => entry.id === decodeURIComponent(pdfMatch[1]));
+        if (!item?.pdfPath) return sendJson(res, 404, { error: "没有找到对应的 PDF 资料。" });
+        await serveFile(res, item.pdfPath, pdfMatch[2] ? "attachment" : "inline");
+        return;
+      }
+      if (req.method === "GET" && pathname === "/vendor/pdf.mjs") {
+        await serveFile(res, path.join(pdfJsRoot, "pdf.min.mjs"));
+        return;
+      }
+      if (req.method === "GET" && pathname === "/vendor/pdf.worker.mjs") {
+        await serveFile(res, path.join(pdfJsRoot, "pdf.worker.min.mjs"));
         return;
       }
 
-      const staticPath =
-        pathname === "/"
-          ? path.join(publicRoot, "index.html")
-          : path.join(publicRoot, pathname.replace(/^\/+/, ""));
-
-      if (ensureInsideRoot(publicRoot, staticPath) && fs.existsSync(staticPath)) {
-        await serveStaticFile(res, staticPath);
+      const staticPath = pathname === "/"
+        ? path.join(publicRoot, "index.html")
+        : path.join(publicRoot, pathname.replace(/^\/+/, ""));
+      if (isInsideOrEqual(publicRoot, staticPath) && fs.existsSync(staticPath)) {
+        await serveFile(res, staticPath);
         return;
       }
-
       sendText(res, 404, "Not found");
     } catch (error) {
-      sendJson(res, 500, {
-        error: "服务处理失败。",
-        detail: error instanceof Error ? error.message : String(error)
-      });
+      sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  const onListening = () => {
-    const itemCount = dataset.items.length;
-    const matchedCount = dataset.items.filter((item) => item.pdfUrl).length;
+  server.once("listening", () => {
     const address = server.address();
     const port = typeof address === "object" && address ? address.port : preferredPort;
     writePortFile(port);
     console.log(`审核工具已启动：http://${host}:${port}`);
-    console.log(`共加载 ${itemCount} 份审核结果，匹配到 ${matchedCount} 份 PDF。`);
-  };
+    console.log(`共加载 ${dataset.items.length} 份审核结果。`);
+  });
 
-  server.once("listening", onListening);
-
-  const tryListen = (port) => {
-    const onError = (error) => {
-      if (error && error.code === "EADDRINUSE" && port < preferredPort + 20) {
-        tryListen(port + 1);
-        return;
-      }
+  function tryListen(port) {
+    server.once("error", (error) => {
+      if (error?.code === "EADDRINUSE" && port < preferredPort + 20) return tryListen(port + 1);
       throw error;
-    };
-    server.once("error", onError);
+    });
     server.listen(port, host);
-  };
-
+  }
   tryListen(preferredPort);
 }
 

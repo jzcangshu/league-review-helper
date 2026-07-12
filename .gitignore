@@ -27,6 +27,7 @@ examples/**/入团申请资料/*.txt
 # Local runtime files
 review-web/sources.json
 !review-web/sources.json
+review-web/sources.local.json
 review-web/*.log
 review-web/review-web-port.txt
 
