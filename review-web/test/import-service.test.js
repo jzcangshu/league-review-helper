@@ -122,7 +122,58 @@ test("requires manual confirmation for a fuzzy name and can append the PDF name 
   await workbook.xlsx.readFile(fixture.excelPath);
   const names = workbook.getWorksheet("名单").getColumn(1).values;
   assert.ok(names.includes("张珊"));
+  assert.ok(names.includes("张三"));
   assert.equal(await fs.readFile(path.join(fixture.reviewRoot, "示例中学", "张珊_审核结果.txt"), "utf8"), "");
+});
+
+test("excludes roster names already claimed by exact PDFs from fuzzy candidates", async () => {
+  const fixture = await createFixture([
+    { name: "林小辰", result: "" },
+    { name: "林小鑫", result: "" }
+  ]);
+  await fs.rename(path.join(fixture.pdfDir, "林小辰.pdf"), path.join(fixture.pdfDir, "林小晨.pdf"));
+  const analysis = await analyzeImport({
+    workspaceRoot: fixture.root,
+    reviewRoot: fixture.reviewRoot,
+    school: "示例中学",
+    pdfDir: fixture.pdfDir,
+    excelPath: fixture.excelPath
+  });
+  const item = analysis.items.find((entry) => entry.name === "林小晨");
+  assert.equal(item.matchKind, "fuzzy");
+  assert.equal(item.excelName, "林小辰");
+  assert.deepEqual(item.matchCandidates, []);
+});
+
+test("ambiguous PDF can be kept as a different person and appended once", async () => {
+  const fixture = await createFixture([
+    { name: "林小辰", result: "" },
+    { name: "林小鑫", result: "" }
+  ]);
+  await fs.rename(path.join(fixture.pdfDir, "林小辰.pdf"), path.join(fixture.pdfDir, "林小晨.pdf"));
+  await fs.rename(path.join(fixture.pdfDir, "林小鑫.pdf"), path.join(fixture.pdfDir, "李四.pdf"));
+  const analysis = await analyzeImport({
+    workspaceRoot: fixture.root,
+    reviewRoot: fixture.reviewRoot,
+    school: "示例中学",
+    pdfDir: fixture.pdfDir,
+    excelPath: fixture.excelPath
+  });
+  const ambiguous = analysis.items.find((entry) => entry.name === "林小晨");
+  assert.equal(ambiguous.matchKind, "ambiguous");
+  assert.deepEqual(ambiguous.matchCandidates, ["林小辰", "林小鑫"]);
+
+  const result = await commitImport({
+    analysis,
+    bindings: { 林小晨: "__append__", 李四: "__skip__" }
+  });
+  assert.equal(result.appended, 1);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(fixture.excelPath);
+  const names = workbook.getWorksheet("名单").getColumn(1).values;
+  assert.equal(names.filter((name) => name === "林小晨").length, 1);
+  assert.ok(names.includes("林小辰"));
+  assert.ok(names.includes("林小鑫"));
 });
 
 test("uses the Excel name as canonical and renames the PDF and review TXT", async () => {

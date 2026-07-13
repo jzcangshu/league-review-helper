@@ -142,12 +142,16 @@ async function analyzeImport(options) {
     .filter((entry) => entry.name);
   const pdfNames = pdfEntries.map((entry) => entry.name);
   const excelNames = roster.rows.map((row) => row.name);
+  const exactMatchedNames = new Set(pdfNames.filter((name) => excelNames.includes(name)));
+  const fuzzyCandidateNames = excelNames.filter((name) => !exactMatchedNames.has(name));
   const schoolReviewDir = path.join(reviewRoot, school);
 
   const usedExcelNames = new Set();
   const items = [];
   for (const [pdfIndex, entry] of pdfEntries.entries()) {
-    const match = uniqueNameMatch(entry.name, excelNames);
+    const match = excelNames.includes(entry.name)
+      ? { name: entry.name, kind: "exact" }
+      : uniqueNameMatch(entry.name, fuzzyCandidateNames);
     const excelRow = match.name ? roster.rows.find((row) => row.name === match.name) : null;
     if (excelRow) usedExcelNames.add(excelRow.name);
     const reviewPath = path.join(schoolReviewDir, `${entry.name}_审核结果.txt`);

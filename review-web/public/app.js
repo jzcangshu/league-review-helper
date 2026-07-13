@@ -2,6 +2,7 @@ import * as pdfjsLib from "/vendor/pdf.mjs";
 import { shouldAutoMarkReviewed } from "/review-timing.js";
 import { findDocumentOcrMatches, transformOcrBox } from "/ocr-matcher.js";
 import { analyzeOcrReview } from "/ocr-review.js";
+import { classifyImportDecisions, importCandidateNames } from "/import-decisions.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/vendor/pdf.worker.mjs";
 
@@ -481,42 +482,90 @@ function renderRecognitionSummary(analysis) {
       strong.textContent = `PDF：${item.name}`;
       const hint = document.createElement("div");
       hint.className = "hint";
-      const candidates = item.excelName ? [item.excelName] : item.matchCandidates || [];
+      const candidates = importCandidateNames(item);
       hint.textContent = `名单：${candidates.join("、")}`;
       copy.append(strong, hint);
+      const decisionPanel = document.createElement("div");
+      decisionPanel.className = "typo-decision-panel";
+      let candidateSelect = null;
+      if (candidates.length > 1) {
+        const candidateControl = document.createElement("label");
+        candidateControl.className = "typo-candidate-control";
+        const candidateLabel = document.createElement("span");
+        candidateLabel.textContent = "疑似对应的名单人员";
+        candidateSelect = document.createElement("select");
+        candidateSelect.innerHTML = `<option value="">请先选择人员</option>`;
+        for (const candidate of candidates) {
+          const option = document.createElement("option");
+          option.value = candidate;
+          option.textContent = candidate;
+          candidateSelect.appendChild(option);
+        }
+        candidateControl.append(candidateLabel, candidateSelect);
+        decisionPanel.appendChild(candidateControl);
+      }
       const choices = document.createElement("div");
       choices.className = "typo-choice-list";
-      for (const candidate of candidates) {
-        const excelCorrect = document.createElement("button");
-        excelCorrect.type = "button";
-        excelCorrect.className = "typo-choice";
-        excelCorrect.dataset.bindingValue = `excel:${candidate}`;
-        excelCorrect.textContent = `名单“${candidate}”正确`;
-        const pdfCorrect = document.createElement("button");
-        pdfCorrect.type = "button";
-        pdfCorrect.className = "typo-choice";
-        pdfCorrect.dataset.bindingValue = `pdf:${candidate}`;
+      const excelCorrect = document.createElement("button");
+      excelCorrect.type = "button";
+      excelCorrect.className = "typo-choice";
+      const pdfCorrect = document.createElement("button");
+      pdfCorrect.type = "button";
+      pdfCorrect.className = "typo-choice";
+      const keepBoth = document.createElement("button");
+      keepBoth.type = "button";
+      keepBoth.className = "typo-choice keep-both";
+      keepBoth.dataset.bindingValue = "__append__";
+      keepBoth.textContent = "并非同一人，保留两人";
+
+      const currentCandidate = () => candidateSelect ? candidateSelect.value : candidates[0] || "";
+      const updateCandidateChoices = () => {
+        const candidate = currentCandidate();
+        excelCorrect.disabled = !candidate;
+        pdfCorrect.disabled = !candidate;
+        excelCorrect.dataset.bindingValue = candidate ? `excel:${candidate}` : "";
+        pdfCorrect.dataset.bindingValue = candidate ? `pdf:${candidate}` : "";
+        excelCorrect.textContent = candidate ? `名单“${candidate}”正确` : "名单姓名正确";
         pdfCorrect.textContent = `PDF“${item.name}”正确`;
-        for (const button of [excelCorrect, pdfCorrect]) {
-          button.addEventListener("click", () => {
-            for (const sibling of choices.querySelectorAll(".typo-choice")) sibling.classList.remove("active");
-            button.classList.add("active");
-            row.dataset.bindingValue = button.dataset.bindingValue;
-            choices.classList.remove("needs-attention");
-            updateConfirmImportState();
-          });
-        }
-        const separator = document.createElement("span");
-        separator.className = "typo-choice-or";
-        separator.textContent = "or";
-        choices.append(excelCorrect, separator, pdfCorrect);
+      };
+      const choose = (button) => {
+        if (!button.dataset.bindingValue) return;
+        for (const sibling of choices.querySelectorAll(".typo-choice")) sibling.classList.remove("active");
+        button.classList.add("active");
+        row.dataset.bindingValue = button.dataset.bindingValue;
+        choices.classList.remove("needs-attention");
+        updateConfirmImportState();
+      };
+      for (const button of [excelCorrect, pdfCorrect, keepBoth]) {
+        button.addEventListener("click", () => choose(button));
       }
+      if (candidateSelect) {
+        candidateSelect.addEventListener("change", () => {
+          if (row.dataset.bindingValue !== "__append__") {
+            row.dataset.bindingValue = "";
+            excelCorrect.classList.remove("active");
+            pdfCorrect.classList.remove("active");
+          }
+          updateCandidateChoices();
+          updateConfirmImportState();
+        });
+      }
+      const separator1 = document.createElement("span");
+      separator1.className = "typo-choice-or";
+      separator1.textContent = "or";
+      const separator2 = separator1.cloneNode(true);
+      choices.append(excelCorrect, separator1, pdfCorrect, separator2, keepBoth);
+      updateCandidateChoices();
+      const keepBothHint = document.createElement("div");
+      keepBothHint.className = "hint typo-keep-both-hint";
+      keepBothHint.textContent = "选择“保留两人”后，PDF 姓名会新增到 Excel，原名单人员不会被改名。";
+      decisionPanel.append(choices, keepBothHint);
       const openPdf = document.createElement("button");
       openPdf.type = "button";
       openPdf.className = "small-button";
       openPdf.textContent = "打开 PDF 首页";
       openPdf.addEventListener("click", () => window.open(item.pdfPreviewUrl, "_blank", "noopener"));
-      row.append(copy, choices, openPdf);
+      row.append(copy, decisionPanel, openPdf);
       return row;
     }
   );
@@ -583,17 +632,15 @@ function showUnresolvedImportFeedback() {
 function buildReportText() {
   const analysis = state.analysis;
   const bindings = collectBindings();
+  const classification = classifyImportDecisions(analysis, bindings);
   const lines = ["只在名单出现，无入团申请书PDF"];
-  lines.push(...(analysis.onlyExcel?.length ? analysis.onlyExcel : ["无"]));
+  lines.push(...(classification.onlyExcel.length ? classification.onlyExcel : ["无"]));
   lines.push("", "只有入团申请书PDF，未出现于名单中");
-  const onlyPdf = (analysis.items || []).filter((item) => item.matchKind === "missing");
-  lines.push(...(onlyPdf.length ? onlyPdf.map((item) => item.name) : ["无"]));
+  lines.push(...(classification.onlyPdf.length ? classification.onlyPdf.map((item) => item.name) : ["无"]));
   lines.push("", "姓名登记存在错别字");
-  const typoItems = (analysis.items || []).filter((item) => item.matchKind === "fuzzy" || item.matchKind === "ambiguous");
-  if (!typoItems.length) lines.push("无");
-  for (const item of typoItems) {
-    const decision = bindings[item.name];
-    const [source, excelName] = decision.split(":");
+  if (!classification.typos.length) lines.push("无");
+  for (const { item, binding: decision, excelName } of classification.typos) {
+    const [source] = decision.split(":");
     const realName = source === "excel" ? excelName : item.name;
     const method = source === "excel"
       ? `以Excel姓名“${excelName}”为准，统一PDF文件名和审核结果文件`

@@ -1185,6 +1185,33 @@ button.primary:hover {
   transition: border-color 140ms ease, background 140ms ease;
 }
 
+.typo-decision-panel {
+  display: grid;
+  gap: 6px;
+}
+
+.typo-candidate-control {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 1fr);
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.typo-choice:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.typo-choice.keep-both {
+  border-style: dashed;
+}
+
+.typo-keep-both-hint {
+  text-align: left;
+}
+
 .typo-choice-list.needs-attention {
   border-color: var(--danger);
   background: #fff1f0;

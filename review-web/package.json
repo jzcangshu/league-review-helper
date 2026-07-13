@@ -1,6 +1,6 @@
 {
   "name": "review-web",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": false,
   "description": "Local youth league application PDF review helper",
   "scripts": {
