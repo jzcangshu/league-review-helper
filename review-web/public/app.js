@@ -930,7 +930,7 @@ async function saveNotes() {
   }
 }
 
-const OCR_REVIEW_ORDER = ["age", "studyHours", "dateOrder", "declaration", "joinDate", "activist"];
+const OCR_REVIEW_ORDER = ["age", "studyHours", "declaration", "activist"];
 
 function stopOcrProgress() {
   clearInterval(state.ocrProgressTimer);
@@ -962,9 +962,7 @@ function renderOcrReviewRail() {
     const check = checks?.[key] || { label: {
       age: "年龄门槛",
       studyHours: "团课学时",
-      dateOrder: "后续日期",
       declaration: "信仰声明",
-      joinDate: "入团日期",
       activist: "积极分子"
     }[key], status: "pending", detail: state.ocrEnabled ? "等待识别" : "OCR 已关闭", page: null };
     const item = document.createElement("div");
@@ -1110,7 +1108,7 @@ async function loadOcrHighlights(item, pdfLoadToken) {
     renderOcrReviewRail();
     const totalMatches = Object.values(state.ocrMatches).reduce((sum, matches) => sum + matches.length, 0);
     elements.ocrStatus.textContent = totalMatches ? `共标注 ${totalMatches} 处` : "未找到可靠匹配";
-    setOcrProgress("6 项完成", 100, false);
+    setOcrProgress("4 项完成", 100, false);
     renderOcrHighlights();
     void prefetchUpcomingOcr(item, prefetchToken);
   } catch (error) {
@@ -1360,7 +1358,7 @@ function attachEvents() {
     if (state.ocrData) {
       renderOcrHighlights();
       renderOcrReviewRail();
-      setOcrProgress("6 项完成", 100, false);
+      setOcrProgress("4 项完成", 100, false);
     }
     else if (item?.hasPdf) loadOcrHighlights(item, state.pdfLoadToken);
   });
