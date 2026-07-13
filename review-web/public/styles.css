@@ -604,6 +604,12 @@ button.primary:hover {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.72) inset;
 }
 
+.ocr-highlight.approximate {
+  border-style: dashed;
+  border-color: rgba(0, 112, 160, 0.92);
+  background: rgba(60, 190, 230, 0.2);
+}
+
 .ocr-status {
   max-width: 132px;
   overflow: hidden;

@@ -6,14 +6,50 @@ export const OCR_TARGETS = [
       "只信仰马克思主义",
       "无其他宗教信仰",
       "未参加任何宗教活动"
-    ]
+    ],
+    fragments: [
+      "只信仰", "马克思主义", "无其他", "其他宗教",
+      "宗教信仰", "未参加", "任何宗教", "宗教活动"
+    ],
+    minimumFragments: 1,
+    singleFragments: ["马克思主义", "宗教信仰", "任何宗教", "宗教活动"]
   },
-  { label: "马克思列宁主义", phrases: ["马克思列宁主义"] },
-  { label: "毛泽东思想", phrases: ["毛泽东思想"] },
-  { label: "邓小平理论", phrases: ["邓小平理论"] },
-  { label: "三个代表重要思想", phrases: ["三个代表重要思想"] },
-  { label: "科学发展观", phrases: ["科学发展观"] },
-  { label: "习近平新时代中国特色社会主义", phrases: ["习近平新时代中国特色社会主义"] }
+  {
+    label: "马克思列宁主义",
+    phrases: [],
+    fragments: ["马克思", "列宁"],
+    requiredAny: ["列宁"]
+  },
+  {
+    label: "毛泽东思想",
+    phrases: [],
+    fragments: ["毛泽东", "思想"],
+    requiredAny: ["毛泽东"]
+  },
+  {
+    label: "邓小平理论",
+    phrases: [],
+    fragments: ["邓小平", "理论"],
+    requiredAny: ["邓小平"]
+  },
+  {
+    label: "三个代表重要思想",
+    phrases: [],
+    fragments: ["三个代表", "重要思想"],
+    requiredAny: ["三个代表"]
+  },
+  {
+    label: "科学发展观",
+    phrases: [],
+    fragments: ["科学", "发展观"],
+    requiredAny: ["科学"]
+  },
+  {
+    label: "习近平新时代中国特色社会主义",
+    phrases: [],
+    fragments: ["习近平", "新时代", "中国特色社会主义"],
+    requiredAny: ["习近平"]
+  }
 ];
 
 export function normalizeOcrText(value) {
@@ -102,10 +138,10 @@ export function fuzzyTextScore(target, candidate) {
 }
 
 function matchThreshold(length) {
-  if (length <= 4) return { score: 0.52, shared: 2 };
-  if (length <= 7) return { score: 0.43, shared: 3 };
-  if (length <= 12) return { score: 0.36, shared: 3 };
-  return { score: 0.3, shared: 4 };
+  if (length <= 4) return { score: 0.65, shared: 3 };
+  if (length <= 7) return { score: 0.55, shared: 4 };
+  if (length <= 12) return { score: 0.48, shared: 5 };
+  return { score: 0.42, shared: 6 };
 }
 
 function flattenPage(page) {
@@ -146,13 +182,20 @@ function boxesForRange(words, startWord, endWord) {
   }));
 }
 
-function bestPhraseMatches(page, target, phrase) {
+function bestPhraseMatches(page, target, phrase, recall = false) {
   const { words, chars } = flattenPage(page);
   const normalizedPhrase = normalizeOcrText(phrase);
   if (!normalizedPhrase || !chars.length) return [];
-  const threshold = matchThreshold(normalizedPhrase.length);
-  const sizes = [...new Set([0.7, 0.85, 1, 1.15, 1.3].map((ratio) =>
-    Math.max(2, Math.round(normalizedPhrase.length * ratio))))];
+  const threshold = recall
+    ? {
+      score: normalizedPhrase.length <= 4 ? 0.55 : 0.48,
+      shared: Math.max(2, Math.ceil(normalizedPhrase.length * 0.6))
+    }
+    : matchThreshold(normalizedPhrase.length);
+  const sizes = recall
+    ? [...new Set([normalizedPhrase.length - 1, normalizedPhrase.length, normalizedPhrase.length + 1].map((size) => Math.max(2, size)))]
+    : [...new Set([0.7, 0.85, 1, 1.15, 1.3].map((ratio) =>
+      Math.max(2, Math.round(normalizedPhrase.length * ratio))))];
   const candidates = [];
   for (let start = 0; start < chars.length; start += 1) {
     for (const size of sizes) {
@@ -169,7 +212,8 @@ function bestPhraseMatches(page, target, phrase) {
         score: result.score,
         startWord,
         endWord,
-        boxes: boxesForRange(words, startWord, endWord)
+        boxes: boxesForRange(words, startWord, endWord),
+        approximate: recall
       });
     }
   }
@@ -184,19 +228,97 @@ function bestPhraseMatches(page, target, phrase) {
   return selected;
 }
 
+function centerY(match) {
+  const top = Math.min(...match.boxes.map((box) => box.y));
+  const bottom = Math.max(...match.boxes.map((box) => box.y + box.height));
+  return (top + bottom) / 2;
+}
+
+function lineBoxes(matches, page, paddingRatio = 0.008) {
+  const paddingX = page.width * paddingRatio;
+  const paddingY = page.height * paddingRatio;
+  const selected = [];
+  for (const box of matches.flatMap((match) => match.boxes).sort((left, right) => left.y - right.y)) {
+    const duplicate = selected.some((current) =>
+      Math.abs(current.y - box.y) <= Math.max(current.height, box.height) * 0.5 &&
+      Math.abs(current.x - box.x) <= Math.max(current.width, box.width) * 0.5);
+    if (duplicate) continue;
+    const left = Math.max(0, box.x - paddingX);
+    const top = Math.max(0, box.y - paddingY);
+    selected.push({
+      x: left,
+      y: top,
+      width: Math.min(page.width, box.x + box.width + paddingX) - left,
+      height: Math.min(page.height, box.y + box.height + paddingY) - top
+    });
+  }
+  return selected;
+}
+
+function findFragmentClusters(page, target) {
+  const fragmentMatches = (target.fragments || []).flatMap((fragment) =>
+    bestPhraseMatches(page, target.label, fragment, true));
+  fragmentMatches.sort((left, right) => centerY(left) - centerY(right));
+  const clusters = [];
+  for (const match of fragmentMatches) {
+    const cluster = clusters.find((candidate) =>
+      Math.abs(candidate.center - centerY(match)) <= page.height * 0.08);
+    if (cluster) {
+      cluster.matches.push(match);
+      cluster.center = cluster.matches.reduce((sum, item) => sum + centerY(item), 0) / cluster.matches.length;
+    } else clusters.push({ center: centerY(match), matches: [match] });
+  }
+  return clusters.flatMap((cluster) => {
+    const fragments = [...new Set(cluster.matches.map((match) => match.phrase))];
+    const minimumFragments = target.minimumFragments || 2;
+    if (fragments.length < minimumFragments) return [];
+    if (fragments.length === 1 && target.singleFragments && !target.singleFragments.includes(fragments[0])) return [];
+    if (target.requiredAny?.length && !target.requiredAny.some((required) => fragments.includes(required))) return [];
+    return [{
+      target: target.label,
+      phrase: fragments.join(" + "),
+      score: Math.max(...cluster.matches.map((match) => match.score)),
+      boxes: lineBoxes(cluster.matches, page),
+      approximate: true,
+      fragmentCount: fragments.length
+    }];
+  });
+}
+
+function matchesOverlap(left, right) {
+  return left.boxes.some((leftBox) => right.boxes.some((rightBox) => {
+    const overlapWidth = Math.max(0, Math.min(leftBox.x + leftBox.width, rightBox.x + rightBox.width) - Math.max(leftBox.x, rightBox.x));
+    const overlapHeight = Math.max(0, Math.min(leftBox.y + leftBox.height, rightBox.y + rightBox.height) - Math.max(leftBox.y, rightBox.y));
+    const overlapArea = overlapWidth * overlapHeight;
+    const smallerArea = Math.min(leftBox.width * leftBox.height, rightBox.width * rightBox.height);
+    return smallerArea > 0 && overlapArea / smallerArea >= 0.3;
+  }));
+}
+
+function matchesNearby(left, right, page) {
+  const leftCenters = left.boxes.map((box) => box.y + box.height / 2);
+  const rightCenters = right.boxes.map((box) => box.y + box.height / 2);
+  return leftCenters.some((leftCenter) => rightCenters.some((rightCenter) =>
+    Math.abs(leftCenter - rightCenter) <= page.height * 0.05));
+}
+
 export function findOcrTargetMatches(page, targets = OCR_TARGETS) {
   const matches = [];
   for (const target of targets) {
     const targetMatches = target.phrases.flatMap((phrase) => bestPhraseMatches(page, target.label, phrase));
+    targetMatches.push(...findFragmentClusters(page, target));
     targetMatches.sort((left, right) => right.score - left.score);
     const selected = [];
     for (const candidate of targetMatches) {
-      const overlaps = selected.some((match) =>
-        candidate.startWord <= match.endWord && candidate.endWord >= match.startWord);
-      if (!overlaps) selected.push(candidate);
-      if (selected.length >= 3) break;
+      const existing = selected.find((match) => matchesOverlap(candidate, match) || matchesNearby(candidate, match, page));
+      if (existing) {
+        existing.boxes = lineBoxes([existing, candidate], page);
+        existing.score = Math.max(existing.score, candidate.score);
+        continue;
+      }
+      selected.push(candidate);
     }
-    matches.push(...selected);
+    matches.push(...selected.slice(0, 3));
   }
   return matches;
 }
@@ -205,15 +327,20 @@ export function findDocumentOcrMatches(ocrData, targets = OCR_TARGETS) {
   const pages = ocrData.pages || [];
   const relevantPages = new Set();
   for (const page of pages) {
-    const text = normalizeOcrText((page.lines || []).map((line) => line.text).join(""));
-    if (["入团志愿", "入团介绍", "支部大会"].some((heading) => text.includes(heading))) {
-      relevantPages.add(page.page);
-      relevantPages.add(page.page + 1);
+    const hasApplicationHeading = (page.lines || []).some((line) => {
+      const text = normalizeOcrText(line.text);
+      return text === "入团志愿";
+    });
+    if (hasApplicationHeading) {
+      for (let offset = 0; offset <= 4; offset += 1) relevantPages.add(page.page + offset);
     }
   }
   return Object.fromEntries(pages.map((page) => [
     page.page,
-    relevantPages.size && !relevantPages.has(page.page) ? [] : findOcrTargetMatches(page, targets)
+    (() => {
+      if (relevantPages.size && !relevantPages.has(page.page)) return [];
+      return findOcrTargetMatches(page, targets);
+    })()
   ]));
 }
 

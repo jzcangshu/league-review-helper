@@ -32,7 +32,9 @@ const sourcesTemplatePath = path.join(appRoot, "sources.json");
 const sourcesLocalPath = path.join(appRoot, "sources.local.json");
 const pdfJsRoot = path.join(appRoot, "node_modules", "pdfjs-dist", "build");
 const ocrCacheRoot = path.join(appRoot, ".ocr-cache");
-const ocrScriptPath = path.join(appRoot, "scripts", "ocr-pdf.ps1");
+const ocrRuntimeRoot = path.join(appRoot, ".ocr-python");
+const ocrModelCacheRoot = path.join(appRoot, ".ocr-models");
+const ocrScriptPath = path.join(appRoot, "scripts", "ocr-pdf-v6.py");
 const host = "127.0.0.1";
 const preferredPort = 4173;
 const portFilePath = path.join(os.tmpdir(), "review-web-port.json");
@@ -548,7 +550,9 @@ async function start() {
         const result = await recognizePdf({
           pdfPath: item.pdfPath,
           cacheRoot: ocrCacheRoot,
-          scriptPath: ocrScriptPath
+          scriptPath: ocrScriptPath,
+          runtimeRoot: ocrRuntimeRoot,
+          modelCacheRoot: ocrModelCacheRoot
         });
         sendJson(res, 200, result);
         return;

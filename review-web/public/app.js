@@ -953,7 +953,7 @@ function renderOcrHighlights() {
         state.pdfRotation
       );
       const highlight = document.createElement("div");
-      highlight.className = "ocr-highlight";
+      highlight.className = `ocr-highlight${match.approximate ? " approximate" : ""}`;
       highlight.title = `${match.target}（疑似匹配 ${Math.round(match.score * 100)}%）`;
       highlight.style.left = `${Math.max(0, box.left)}px`;
       highlight.style.top = `${Math.max(0, box.top)}px`;
