@@ -58,6 +58,7 @@ const state = {
   exportSchool: "",
   exportExcelPath: "",
   lastExport: null,
+  exportActionState: "idle",
   ocrEnabled: true,
   ocrData: null,
   ocrMatches: {},
@@ -202,6 +203,21 @@ function setExportStatus(message, kind = "") {
   elements.exportStatus.classList.toggle("error", kind === "error");
 }
 
+function setExportActionState(kind = "idle") {
+  const labels = {
+    idle: "回填当前学校",
+    working: "正在生成副本...",
+    attention: "请选择结果列",
+    success: "✓ 回填成功",
+    error: "✕ 回填失败"
+  };
+  state.exportActionState = kind;
+  elements.writeBackExcelButton.textContent = labels[kind] || labels.idle;
+  for (const stateName of ["working", "attention", "success", "error"]) {
+    elements.writeBackExcelButton.classList.toggle(`export-${stateName}`, kind === stateName);
+  }
+}
+
 function hideExportOpenActions() {
   state.lastExport = null;
   elements.exportOpenActions.hidden = true;
@@ -209,37 +225,49 @@ function hideExportOpenActions() {
 
 function updateExportPanel() {
   const school = getCurrentSchool();
-  if (state.exportSchool !== school) {
+  const schoolChanged = state.exportSchool !== school;
+  if (schoolChanged) {
     state.exportSchool = school;
     state.exportExcelPath = "";
     elements.exportResultColumnSelect.hidden = true;
     hideExportOpenActions();
+    setExportActionState("idle");
   }
   elements.exportSchoolLabel.textContent = school || "尚未选择学校";
   const source = state.sources.find((item) => item.school === school && item.active);
-  if (!school) setExportStatus("请先选择一所学校。");
-  else if (source?.excelExists) setExportStatus("已找到该学校名单，写入前会自动备份并按姓名去重。");
-  else setExportStatus("回填时请选择该学校的 Excel 名单。");
-  elements.writeBackExcelButton.disabled = !school;
+  if (state.exportActionState === "idle") {
+    if (!school) setExportStatus("请先选择一所学校。");
+    else if (source?.excelExists) setExportStatus("已找到该学校名单，将在原文件旁生成审核回填副本。");
+    else setExportStatus("回填时请选择该学校的 Excel 名单，原文件不会被修改。");
+  }
+  elements.writeBackExcelButton.disabled = !school || state.exportActionState === "working";
 }
 
 async function writeBackCurrentSchool() {
   const school = getCurrentSchool();
   if (!school) return;
-  await saveCurrentReview();
+  if (!(await saveCurrentReview())) {
+    setExportActionState("error");
+    setExportStatus("回填失败：当前审核结果尚未保存成功。", "error");
+    return;
+  }
   elements.writeBackExcelButton.disabled = true;
   try {
     const source = state.sources.find((item) => item.school === school && item.active);
     let excelPath = state.exportExcelPath || source?.excelPath || "";
     if (!excelPath || source?.excelExists === false) {
       const picked = await api("/api/picker/excel", { method: "POST" });
-      if (!picked.path) return;
+      if (!picked.path) {
+        setExportActionState("idle");
+        setExportStatus("已取消选择 Excel，未生成任何文件。");
+        return;
+      }
       excelPath = picked.path;
       state.exportExcelPath = excelPath;
     }
-    if (!window.confirm(`确定将“${school}”的审核结果覆盖写入所选 Excel 吗？程序会先备份原文件。`)) return;
     hideExportOpenActions();
-    setExportStatus("正在备份并回填，请稍候...", "working");
+    setExportActionState("working");
+    setExportStatus("正在生成审核回填副本，原 Excel 文件保持不变...", "working");
     const payload = await api("/api/export/excel", {
       method: "POST",
       body: JSON.stringify({
@@ -257,10 +285,12 @@ async function writeBackCurrentSchool() {
         elements.exportResultColumnSelect.appendChild(option);
       }
       elements.exportResultColumnSelect.hidden = false;
-      setExportStatus("检测到多个问题列，请选择要覆盖写入的列后再次回填。", "error");
+      setExportActionState("attention");
+      setExportStatus("检测到多个问题列，请选择要写入的列后再次回填。", "working");
       return;
     }
     if (payload.needsLayoutConfirmation) {
+      setExportActionState("error");
       setExportStatus(`无法可靠识别名单布局：${(payload.layoutWarnings || []).join("；")}`, "error");
       return;
     }
@@ -268,12 +298,14 @@ async function writeBackCurrentSchool() {
     state.lastExport = { excelPath: payload.excelPath, folderPath: payload.folderPath };
     elements.exportOpenActions.hidden = false;
     const fileName = String(payload.excelPath || "").split(/[\\/]/).pop();
-    setExportStatus(`回填完成：已审 ${payload.reviewed}，未审 ${payload.pending}，无资料 ${payload.missing}，新增 ${payload.appended} 人。已保存到 ${fileName}`, "success");
+    setExportActionState("success");
+    setExportStatus(`已生成副本：已审 ${payload.reviewed}，未审 ${payload.pending}，无 PDF ${payload.missing}，新增 ${payload.appended} 人。文件：${fileName}`, "success");
     await loadSources();
   } catch (error) {
+    setExportActionState("error");
     setExportStatus(`回填失败：${error.message}`, "error");
   } finally {
-    elements.writeBackExcelButton.disabled = false;
+    elements.writeBackExcelButton.disabled = !school;
   }
 }
 
@@ -1743,6 +1775,10 @@ function attachEvents() {
   });
   elements.shortcutToolTab.addEventListener("click", () => showUtilityPanel("shortcuts"));
   elements.exportToolTab.addEventListener("click", () => showUtilityPanel("export"));
+  elements.exportResultColumnSelect.addEventListener("change", () => {
+    setExportActionState("idle");
+    setExportStatus(`将写入“${elements.exportResultColumnSelect.value}”列，点击按钮生成副本。`);
+  });
   elements.writeBackExcelButton.addEventListener("click", writeBackCurrentSchool);
   elements.openExportFileButton.addEventListener("click", () => openExportPath("file"));
   elements.openExportFolderButton.addEventListener("click", () => openExportPath("folder"));

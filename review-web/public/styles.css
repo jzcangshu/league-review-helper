@@ -438,6 +438,38 @@ button.primary:hover {
   margin-top: 3px;
 }
 
+#writeBackExcelButton {
+  min-width: 150px;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+#writeBackExcelButton.export-working,
+#writeBackExcelButton.export-attention {
+  border-color: #b76a00;
+  background: #b76a00;
+  color: #fff;
+}
+
+#writeBackExcelButton.export-success {
+  border-color: #18864b;
+  background: #18864b;
+  color: #fff;
+}
+
+#writeBackExcelButton.export-success:hover {
+  background: #126d3c;
+}
+
+#writeBackExcelButton.export-error {
+  border-color: #dc2626;
+  background: #dc2626;
+  color: #fff;
+}
+
+#writeBackExcelButton.export-error:hover {
+  background: #b91c1c;
+}
+
 .export-status {
   padding: 6px 8px;
   border-left: 3px solid transparent;

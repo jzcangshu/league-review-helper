@@ -5,8 +5,25 @@ const ExcelJS = require("exceljs");
 const { inspectWorkbook } = require("./import-service");
 const { clean } = require("./review-data");
 
-function safeTimestamp() {
-  return new Date().toISOString().replace(/[:.]/g, "-");
+function outputTimestamp(date = new Date()) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getMonth() + 1}月${date.getDate()}日_${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+}
+
+async function availableOutputPath(excelPath, date) {
+  const extension = path.extname(excelPath);
+  const baseName = path.basename(excelPath, extension);
+  const stem = `${baseName}_${outputTimestamp(date)}_审核回填`;
+  for (let index = 1; ; index += 1) {
+    const suffix = index === 1 ? "" : `(${index})`;
+    const candidate = path.join(path.dirname(excelPath), `${stem}${suffix}${extension}`);
+    try {
+      await fsp.access(candidate);
+    } catch (error) {
+      if (error?.code === "ENOENT") return candidate;
+      throw error;
+    }
+  }
 }
 
 function setFontColor(cell, argb = null) {
@@ -70,6 +87,7 @@ async function writeSchoolResultsToExcel(options) {
       row.getCell(column).style = { ...styleSource.getCell(column).style };
     }
     row.getCell(roster.nameColumn + 1).value = addition.name;
+    setFontColor(row.getCell(roster.nameColumn + 1), "FF000000");
     roster.rows.push({ rowNumber: insertAt, name: addition.name, result: "" });
     existingNames.add(addition.name);
     insertAt += 1;
@@ -91,21 +109,18 @@ async function writeSchoolResultsToExcel(options) {
     }
     if (!item.reviewed) {
       cell.value = "未审核";
-      setFontColor(cell, "FFC65911");
+      setFontColor(cell, "FF000000");
       pending += 1;
       continue;
     }
     const content = await fsp.readFile(item.reviewPath, "utf8").catch(() => "");
     cell.value = content.trim() || null;
-    setFontColor(cell);
+    setFontColor(cell, "FF000000");
     reviewed += 1;
   }
 
-  const backupDir = path.join(options.workspaceRoot, "Excel历史", options.school, `整校回填-${safeTimestamp()}`);
-  await fsp.mkdir(backupDir, { recursive: true });
-  const backupPath = path.join(backupDir, path.basename(excelPath));
-  await fsp.copyFile(excelPath, backupPath);
-  await workbook.xlsx.writeFile(excelPath);
+  const outputPath = await availableOutputPath(excelPath, options.now || new Date());
+  await workbook.xlsx.writeFile(outputPath);
 
   return {
     needsResultColumn: false,
@@ -114,9 +129,9 @@ async function writeSchoolResultsToExcel(options) {
     pending,
     missing,
     appended: additions.length,
-    backupPath,
-    excelPath,
-    folderPath: path.dirname(excelPath),
+    sourceExcelPath: excelPath,
+    excelPath: outputPath,
+    folderPath: path.dirname(outputPath),
     layout: {
       sheet: roster.sheet,
       headerRow: roster.headerRow,
