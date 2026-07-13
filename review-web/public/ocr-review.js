@@ -53,7 +53,7 @@ function extractBirthMonth(line, pageNumber) {
 
 function formatMonth(date) {
   if (!date) return "未识别";
-  return `${date.year}-${String(date.month).padStart(2, "0")}`;
+  return `${date.year}年${date.month}月`;
 }
 
 function addHighlight(highlights, entry, kind, target) {
@@ -76,6 +76,10 @@ function declarationCount(matches, pageNumber) {
 
 function checkResult(label, status, detail, page, extra = {}) {
   return { label, status, detail, page: page || null, ...extra };
+}
+
+function jumpTargets(...targets) {
+  return targets.filter((target) => target?.page);
 }
 
 function countDistinctRows(entries, pageHeight) {
@@ -145,6 +149,29 @@ function analyzeStudyHours(page) {
   return checkResult("团课学时", "pending", `仅可靠识别 ${count} 条记录，请人工确认`, Number(page.page), { focus: hourHeader });
 }
 
+function analyzeDisciplineCourse(page) {
+  if (!page) return checkResult("团纪处分条例", "pending", "未定位到团课学习记录页", null, { jumpTargets: [] });
+  const pageNumber = Number(page.page);
+  const titleLine = page.lines.find((line) => normalizeText(line.text).includes("学习记录"));
+  const titleFocus = lineBox(titleLine);
+  const keywords = ["团纪", "纪律", "处分", "条例"];
+  for (const line of page.lines || []) {
+    const text = normalizeText(line.text);
+    const keyword = keywords.find((candidate) => text.includes(candidate));
+    if (!keyword) continue;
+    const focus = lineBox(line);
+    return checkResult("团纪处分条例", "pass", "已识别到团纪处分条例相关课程", pageNumber, {
+      focus,
+      jumpTargets: jumpTargets({ label: "团课记录", page: pageNumber, focus })
+    });
+  }
+  return checkResult("团纪处分条例", "fail", "未识别到团纪处分条例相关课程", pageNumber, {
+    focus: titleFocus,
+    jumpTargets: jumpTargets({ label: "团课记录", page: pageNumber, focus: titleFocus }),
+    reviewText: "团课学习记录缺少团纪处分条例学习"
+  });
+}
+
 export function analyzeOcrReview(ocrData, declarationMatches = {}) {
   const allPages = ocrData?.pages || [];
   const pageObjects = {
@@ -157,6 +184,8 @@ export function analyzeOcrReview(ocrData, declarationMatches = {}) {
   };
   const pages = Object.fromEntries(Object.entries(pageObjects).map(([key, page]) => [key, page ? Number(page.page) : null]));
   const highlights = {};
+  const studyTitleLine = pageObjects.study?.lines?.find((line) => normalizeText(line.text).includes("学习记录"));
+  const studyFocus = lineBox(studyTitleLine);
 
   const birthLine = pageObjects.experience?.lines?.find((line) => normalizeText(line.text).includes("出生年月"));
   const birthData = extractBirthMonth(birthLine, pages.experience);
@@ -165,12 +194,20 @@ export function analyzeOcrReview(ocrData, declarationMatches = {}) {
     const warning = { page: pages.experience, boxes: [lineBox(birthLine)].filter(Boolean) };
     addHighlight(highlights, warning, "warning", "出生年月识别不完整，请人工确认");
     age = checkResult("年龄门槛", "pending", "出生年月识别不完整，无法计算14周岁月份", pages.experience, {
-      focus: warning.boxes[0]
+      focus: warning.boxes[0],
+      jumpTargets: jumpTargets(
+        { label: "出生年月", page: pages.experience, focus: warning.boxes[0] },
+        { label: "团课记录", page: pages.study, focus: studyFocus }
+      )
     });
   } else {
     const earliestAllowed = { ...birthData, year: birthData.year + 14 };
-    age = checkResult("年龄门槛", "pass", `出生 ${formatMonth(birthData)} · 首次团课不得早于 ${formatMonth(earliestAllowed)}`, pages.experience, {
+    age = checkResult("年龄门槛", "pass", `首次团课不可早于\n${formatMonth(earliestAllowed)}`, pages.experience, {
       focus: birthData.boxes[0],
+      jumpTargets: jumpTargets(
+        { label: "出生年月", page: pages.experience, focus: birthData.boxes[0] },
+        { label: "团课记录", page: pages.study, focus: studyFocus }
+      ),
       reviewText: ""
     });
   }
@@ -181,6 +218,9 @@ export function analyzeOcrReview(ocrData, declarationMatches = {}) {
   } else if (studyHours.status === "pending") {
     addHighlight(highlights, { page: studyHours.page, boxes: [studyHours.focus].filter(Boolean) }, "warning", "团课学时记录需人工确认");
   }
+  studyHours.jumpTargets = jumpTargets({ label: "团课记录", page: studyHours.page, focus: studyHours.focus || studyFocus });
+
+  const disciplineCourse = analyzeDisciplineCourse(pageObjects.study);
 
   const declarationCounts = {
     application: declarationCount(declarationMatches, pages.application) + declarationCount(declarationMatches, pages.applicationSecond),
@@ -207,24 +247,35 @@ export function analyzeOcrReview(ocrData, declarationMatches = {}) {
   const activistLine = secretaryPage?.lines?.find((line) => normalizeText(line.text).includes("被确定为入团积极分子"));
   let activist;
   if (!secretaryPage) {
-    activist = checkResult("积极分子", "pending", "未定位到支部书记签名页", null);
+    activist = checkResult("积极分子", "pending", "未定位到支部书记签名页", null, {
+      jumpTargets: jumpTargets({ label: "团课记录", page: pages.study, focus: studyFocus })
+    });
   } else if (!activistLine) {
-    activist = checkResult("积极分子", "pass", "未检测到相关表述", pages.secretary);
+    activist = checkResult("积极分子", "pass", "未检测到相关表述", pages.secretary, {
+      jumpTargets: jumpTargets(
+        { label: "支部页面", page: pages.secretary, focus: lineBox(secretaryPage.lines.find((line) => normalizeText(line.text).includes("支部书记签名"))) },
+        { label: "团课记录", page: pages.study, focus: studyFocus }
+      )
+    });
   } else {
     const activistEntry = {
       page: pages.secretary,
       boxes: [lineBox(activistLine)].filter(Boolean)
     };
     addHighlight(highlights, activistEntry, "warning", "检测到入团积极分子表述，请人工核对");
-    activist = checkResult("积极分子", "pending", "检测到“被确定为入团积极分子”，请人工核对", pages.secretary, {
+    activist = checkResult("积极分子", "pending", "请确保确认积极分子/递交入团申请时间早于首次团课", pages.secretary, {
       focus: activistEntry.boxes[0],
+      jumpTargets: jumpTargets(
+        { label: "积极分子", page: pages.secretary, focus: activistEntry.boxes[0] },
+        { label: "团课记录", page: pages.study, focus: studyFocus }
+      ),
       reviewText: ""
     });
   }
 
   return {
     pages,
-    checks: { age, studyHours, declaration, activist },
+    checks: { age, studyHours, disciplineCourse, declaration, activist },
     highlights,
     progress: 100
   };

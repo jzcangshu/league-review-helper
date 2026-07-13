@@ -930,7 +930,7 @@ async function saveNotes() {
   }
 }
 
-const OCR_REVIEW_ORDER = ["age", "studyHours", "declaration", "activist"];
+const OCR_REVIEW_ORDER = ["age", "studyHours", "disciplineCourse", "declaration", "activist"];
 
 function stopOcrProgress() {
   clearInterval(state.ocrProgressTimer);
@@ -962,26 +962,29 @@ function renderOcrReviewRail() {
     const check = checks?.[key] || { label: {
       age: "年龄门槛",
       studyHours: "团课学时",
+      disciplineCourse: "团纪处分条例",
       declaration: "信仰声明",
       activist: "积极分子"
     }[key], status: "pending", detail: state.ocrEnabled ? "等待识别" : "OCR 已关闭", page: null };
     const item = document.createElement("div");
     item.className = `ocr-review-item ${check.status}`;
+    item.dataset.checkKey = key;
     const main = document.createElement("div");
     main.className = "ocr-review-main";
+    const titleRow = document.createElement("div");
+    titleRow.className = "ocr-review-title-row";
     const icon = document.createElement("span");
     icon.className = "ocr-review-icon";
     icon.textContent = { pass: "✓", fail: "!", pending: "?" }[check.status] || "·";
-    const copy = document.createElement("span");
-    copy.className = "ocr-review-copy";
     const label = document.createElement("span");
     label.className = "ocr-review-label";
     label.textContent = check.label;
     const detail = document.createElement("span");
     detail.className = "ocr-review-detail";
     detail.textContent = check.detail;
-    copy.append(label, detail);
-    main.append(icon, copy);
+    if (key === "age" && check.status === "pass") detail.classList.add("emphasis");
+    titleRow.append(icon, label);
+    main.append(titleRow, detail);
     const actions = document.createElement("div");
     actions.className = "ocr-review-actions";
     if (check.status === "fail" && check.reviewText) {
@@ -993,13 +996,16 @@ function renderOcrReviewRail() {
       insertButton.addEventListener("click", () => insertOcrReviewIssue(check.reviewText));
       actions.appendChild(insertButton);
     }
-    if (check.page) {
+    const targets = Array.isArray(check.jumpTargets) && check.jumpTargets.length
+      ? check.jumpTargets
+      : check.page ? [{ label: "查看", page: check.page, focus: check.focus }] : [];
+    for (const target of targets) {
       const jumpButton = document.createElement("button");
       jumpButton.type = "button";
       jumpButton.className = "ocr-review-action jump";
-      jumpButton.textContent = "→";
-      jumpButton.title = `跳转到第 ${check.page} 页`;
-      jumpButton.addEventListener("click", () => jumpToOcrReviewCheck(key));
+      jumpButton.textContent = `↗ ${target.label}`;
+      jumpButton.title = `跳转到${target.label}（第 ${target.page} 页）`;
+      jumpButton.addEventListener("click", () => jumpToOcrReviewTarget(target));
       actions.appendChild(jumpButton);
     }
     item.append(main, actions);
@@ -1020,18 +1026,17 @@ function insertOcrReviewIssue(text) {
   insertAtCursor(issue);
 }
 
-async function jumpToOcrReviewCheck(key) {
-  const check = state.ocrReview?.checks?.[key];
-  if (!check?.page || !state.pdfDocument) return;
-  if (state.pdfPage !== check.page) state.pdfPageChanged = true;
-  state.pdfPage = check.page;
+async function jumpToOcrReviewTarget(target) {
+  if (!target?.page || !state.pdfDocument) return;
+  if (state.pdfPage !== target.page) state.pdfPageChanged = true;
+  state.pdfPage = target.page;
   await renderPdfPage();
-  if (!check.focus) return;
-  const page = (state.ocrData?.pages || []).find((entry) => Number(entry.page) === check.page);
+  if (!target.focus) return;
+  const page = (state.ocrData?.pages || []).find((entry) => Number(entry.page) === target.page);
   if (!page) return;
   const viewportWidth = Number.parseFloat(elements.pdfCanvas.style.width) || elements.pdfCanvas.clientWidth;
   const viewportHeight = Number.parseFloat(elements.pdfCanvas.style.height) || elements.pdfCanvas.clientHeight;
-  const box = transformOcrBox(check.focus, page.width, page.height, viewportWidth, viewportHeight, state.pdfRotation);
+  const box = transformOcrBox(target.focus, page.width, page.height, viewportWidth, viewportHeight, state.pdfRotation);
   elements.pdfStage.scrollTo({ top: Math.max(0, box.top - 90), behavior: "smooth" });
 }
 
@@ -1108,7 +1113,7 @@ async function loadOcrHighlights(item, pdfLoadToken) {
     renderOcrReviewRail();
     const totalMatches = Object.values(state.ocrMatches).reduce((sum, matches) => sum + matches.length, 0);
     elements.ocrStatus.textContent = totalMatches ? `共标注 ${totalMatches} 处` : "未找到可靠匹配";
-    setOcrProgress("4 项完成", 100, false);
+    setOcrProgress(`${OCR_REVIEW_ORDER.length} 项完成`, 100, false);
     renderOcrHighlights();
     void prefetchUpcomingOcr(item, prefetchToken);
   } catch (error) {
@@ -1358,7 +1363,7 @@ function attachEvents() {
     if (state.ocrData) {
       renderOcrHighlights();
       renderOcrReviewRail();
-      setOcrProgress("4 项完成", 100, false);
+      setOcrProgress(`${OCR_REVIEW_ORDER.length} 项完成`, 100, false);
     }
     else if (item?.hasPdf) loadOcrHighlights(item, state.pdfLoadToken);
   });

@@ -622,6 +622,7 @@ button.primary:hover {
 .ocr-review-rail {
   min-width: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   border-left: 1px solid rgba(87, 67, 44, 0.24);
   background: #f5f1e9;
 }
@@ -636,13 +637,13 @@ button.primary:hover {
 }
 
 .ocr-review-head strong {
-  font-size: 15px;
+  font-size: 17px;
 }
 
 .ocr-review-head span {
   overflow: hidden;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -679,8 +680,8 @@ button.primary:hover {
   flex-direction: column;
   gap: 9px;
   width: 100%;
-  min-height: 102px;
-  padding: 12px 9px 10px;
+  min-height: 112px;
+  padding: 13px 10px 11px;
   border: 0;
   border-bottom: 1px solid var(--line);
   border-left: 4px solid var(--warn);
@@ -701,9 +702,13 @@ button.primary:hover {
 }
 
 .ocr-review-main {
-  display: grid;
-  grid-template-columns: 25px minmax(0, 1fr);
-  gap: 8px;
+  min-width: 0;
+}
+
+.ocr-review-title-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
 
 .ocr-review-item:hover {
@@ -712,12 +717,13 @@ button.primary:hover {
 
 .ocr-review-icon {
   display: grid;
-  width: 24px;
-  height: 24px;
+  flex: 0 0 auto;
+  width: 27px;
+  height: 27px;
   border: 1px solid var(--line-strong);
   border-radius: 50%;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 800;
   place-items: center;
 }
@@ -738,10 +744,6 @@ button.primary:hover {
   color: var(--warn);
 }
 
-.ocr-review-copy {
-  min-width: 0;
-}
-
 .ocr-review-label,
 .ocr-review-detail {
   display: block;
@@ -750,18 +752,26 @@ button.primary:hover {
 }
 
 .ocr-review-label {
-  font-size: 14px;
-  font-weight: 750;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 800;
   line-height: 1.25;
   white-space: nowrap;
 }
 
 .ocr-review-detail {
-  margin-top: 6px;
+  margin-top: 9px;
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
-  white-space: normal;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.ocr-review-detail.emphasis {
+  color: var(--accent);
+  font-size: 16px;
+  font-weight: 850;
+  line-height: 1.35;
 }
 
 .ocr-review-item.fail .ocr-review-detail {
@@ -771,7 +781,8 @@ button.primary:hover {
 
 .ocr-review-actions {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  justify-content: flex-start;
   gap: 7px;
   min-height: 29px;
 }
@@ -795,8 +806,13 @@ button.primary:hover {
 }
 
 .ocr-review-action.jump {
+  width: auto;
+  min-width: 30px;
+  padding: 0 7px;
   border-color: var(--accent);
   color: var(--accent);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .ocr-status {

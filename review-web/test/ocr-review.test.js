@@ -75,11 +75,19 @@ test("review analysis keeps activist dates as a manual text reminder", async () 
   };
   const result = analyzeOcrReview(ocrData, declarationMatches);
   assert.equal(result.checks.age.status, "pass");
-  assert.equal(result.checks.age.detail, "出生 2012-08 · 首次团课不得早于 2026-08");
+  assert.equal(result.checks.age.detail, "首次团课不可早于\n2026年8月");
+  assert.deepEqual(result.checks.age.jumpTargets.map((target) => [target.label, target.page]), [
+    ["出生年月", 2],
+    ["团课记录", 4]
+  ]);
   assert.equal(result.checks.declaration.status, "fail");
   assert.equal(result.checks.declaration.detail, "声明缺失 · 志愿 1/1 · 介绍人 1/2 · 支部 0/1");
   assert.equal(result.checks.activist.status, "pending");
-  assert.equal(result.checks.activist.detail, "检测到“被确定为入团积极分子”，请人工核对");
+  assert.equal(result.checks.activist.detail, "请确保确认积极分子/递交入团申请时间早于首次团课");
+  assert.deepEqual(result.checks.activist.jumpTargets.map((target) => [target.label, target.page]), [
+    ["积极分子", 13],
+    ["团课记录", 4]
+  ]);
   assert.ok(result.highlights[13].some((entry) => entry.kind === "warning"));
 });
 
@@ -94,7 +102,7 @@ test("non-birth dates do not create automatic date judgments", async () => {
   ] };
   const result = analyzeOcrReview(ocrData, {});
   assert.equal(result.checks.age.status, "pass");
-  assert.equal(result.checks.age.detail, "出生 2011-12 · 首次团课不得早于 2025-12");
+  assert.equal(result.checks.age.detail, "首次团课不可早于\n2025年12月");
   assert.equal(result.checks.dateOrder, undefined);
   assert.equal(result.checks.joinDate, undefined);
   assert.ok(result.highlights[2].some((entry) => entry.kind === "warning"));
@@ -135,4 +143,30 @@ test("study hours below eight provide a review phrase and red target", async () 
   assert.equal(result.checks.studyHours.status, "fail");
   assert.equal(result.checks.studyHours.reviewText, "团课学习记录不足8学时");
   assert.ok(result.highlights[4].some((entry) => entry.kind === "error"));
+});
+
+test("discipline course passes when any suggested keyword is present", async () => {
+  const { analyzeOcrReview } = await import("../public/ocr-review.js");
+  for (const keyword of ["团纪", "纪律", "处分", "条例"]) {
+    const result = analyzeOcrReview({ pages: [page(4, [
+      line("团课学习记录", 420, 80, 300, 42),
+      line(`中国共产主义青年团${keyword}专题学习`, 160, 520, 760, 42)
+    ])] }, {});
+    assert.equal(result.checks.disciplineCourse.status, "pass");
+    assert.equal(result.checks.disciplineCourse.detail, "已识别到团纪处分条例相关课程");
+    assert.equal(result.checks.disciplineCourse.page, 4);
+  }
+});
+
+test("missing discipline course provides a review phrase and study-page jump", async () => {
+  const { analyzeOcrReview } = await import("../public/ocr-review.js");
+  const result = analyzeOcrReview({ pages: [page(4, [
+    line("团课学习记录", 420, 80, 300, 42),
+    line("团章和团史专题学习", 160, 520, 760, 42)
+  ])] }, {});
+  assert.equal(result.checks.disciplineCourse.status, "fail");
+  assert.equal(result.checks.disciplineCourse.reviewText, "团课学习记录缺少团纪处分条例学习");
+  assert.deepEqual(result.checks.disciplineCourse.jumpTargets.map((target) => [target.label, target.page]), [
+    ["团课记录", 4]
+  ]);
 });
