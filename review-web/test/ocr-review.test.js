@@ -75,15 +75,18 @@ test("review analysis flags age, order, declaration count, and join-date mismatc
     10: [{ target: "信仰声明", boxes: [{ x: 300, y: 400, width: 500, height: 50 }] }]
   };
   const result = analyzeOcrReview(ocrData, declarationMatches);
-  assert.equal(result.checks.age.status, "fail");
+  assert.equal(result.checks.age.status, "pass");
+  assert.equal(result.checks.age.detail, "出生 2012-08 · 首次团课不得早于 2026-08");
   assert.equal(result.checks.dateOrder.status, "fail");
-  assert.equal(result.checks.dateOrder.issueCount, 2);
+  assert.equal(result.checks.dateOrder.issueCount, 1);
   assert.equal(result.checks.declaration.status, "fail");
-  assert.equal(result.checks.declaration.detail, "志愿 1/1 · 介绍人 1/2 · 支部 0/1");
+  assert.equal(result.checks.declaration.detail, "声明缺失 · 志愿 1/1 · 介绍人 1/2 · 支部 0/1");
+  assert.equal(result.checks.dateOrder.reviewText, "入团志愿签名及后续审批日期未按时间顺序");
   assert.equal(result.checks.joinDate.status, "fail");
-  assert.equal(result.checks.activist.status, "pass");
-  assert.ok(result.highlights[7].some((entry) => entry.kind === "error"));
-  assert.ok(result.highlights[13].some((entry) => entry.kind === "notice"));
+  assert.equal(result.checks.joinDate.reviewText, "支部大会通过日期与上级团委审批入团日期不一致");
+  assert.equal(result.checks.activist.status, "pending");
+  assert.ok(result.highlights[13].some((entry) => entry.kind === "error"));
+  assert.ok(result.highlights[13].some((entry) => entry.kind === "warning"));
   assert.ok(result.highlights[13].every((entry) => entry.boxes[0].y < 1500));
 });
 
@@ -97,7 +100,9 @@ test("incomplete dates remain pending instead of being treated as compliant", as
     page(5, [line("支部书记签名", 300, 900)])
   ] };
   const result = analyzeOcrReview(ocrData, {});
-  assert.equal(result.checks.age.status, "pending");
+  assert.equal(result.checks.age.status, "pass");
+  assert.equal(result.checks.age.detail, "出生 2011-12 · 首次团课不得早于 2025-12");
   assert.equal(result.checks.dateOrder.status, "pending");
   assert.equal(result.checks.joinDate.status, "pending");
+  assert.deepEqual(result.highlights[2] || [], []);
 });

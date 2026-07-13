@@ -17,7 +17,7 @@ function parseOcrOutput(stdout) {
 async function cacheKey(pdfPath) {
   const stats = await fsp.stat(pdfPath);
   return crypto.createHash("sha1")
-    .update(`${path.resolve(pdfPath)}\n${stats.size}\n${stats.mtimeMs}\nppocrv6-small-det-tiny-rec-v1`)
+    .update(`${path.resolve(pdfPath)}\n${stats.size}\n${stats.mtimeMs}\nppocrv6-small-det-tiny-rec-scale35-v2`)
     .digest("hex");
 }
 

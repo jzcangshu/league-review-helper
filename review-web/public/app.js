@@ -58,7 +58,8 @@ const state = {
   ocrItemId: "",
   ocrLoadToken: 0,
   ocrProgress: 0,
-  ocrProgressTimer: null
+  ocrProgressTimer: null,
+  ocrPrefetchToken: 0
 };
 
 const elementIds = [
@@ -959,17 +960,16 @@ function renderOcrReviewRail() {
   const checks = state.ocrReview?.checks;
   for (const key of OCR_REVIEW_ORDER) {
     const check = checks?.[key] || { label: {
-      age: "年龄判断",
-      dateOrder: "日期顺序",
+      age: "年龄门槛",
+      dateOrder: "后续日期",
       declaration: "信仰声明",
       joinDate: "入团日期",
       activist: "积极分子"
     }[key], status: "pending", detail: state.ocrEnabled ? "等待识别" : "OCR 已关闭", page: null };
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `ocr-review-item ${check.status}`;
-    button.disabled = !check.page;
-    button.title = check.page ? `${check.detail}，点击跳转到第 ${check.page} 页` : check.detail;
+    const item = document.createElement("div");
+    item.className = `ocr-review-item ${check.status}`;
+    const main = document.createElement("div");
+    main.className = "ocr-review-main";
     const icon = document.createElement("span");
     icon.className = "ocr-review-icon";
     icon.textContent = { pass: "✓", fail: "!", pending: "?" }[check.status] || "·";
@@ -982,10 +982,43 @@ function renderOcrReviewRail() {
     detail.className = "ocr-review-detail";
     detail.textContent = check.detail;
     copy.append(label, detail);
-    button.append(icon, copy);
-    if (check.page) button.addEventListener("click", () => jumpToOcrReviewCheck(key));
-    elements.ocrReviewList.appendChild(button);
+    main.append(icon, copy);
+    const actions = document.createElement("div");
+    actions.className = "ocr-review-actions";
+    if (check.status === "fail" && check.reviewText) {
+      const insertButton = document.createElement("button");
+      insertButton.type = "button";
+      insertButton.className = "ocr-review-action insert";
+      insertButton.textContent = "+";
+      insertButton.title = "插入到审核结果";
+      insertButton.addEventListener("click", () => insertOcrReviewIssue(check.reviewText));
+      actions.appendChild(insertButton);
+    }
+    if (check.page) {
+      const jumpButton = document.createElement("button");
+      jumpButton.type = "button";
+      jumpButton.className = "ocr-review-action jump";
+      jumpButton.textContent = "→";
+      jumpButton.title = `跳转到第 ${check.page} 页`;
+      jumpButton.addEventListener("click", () => jumpToOcrReviewCheck(key));
+      actions.appendChild(jumpButton);
+    }
+    item.append(main, actions);
+    elements.ocrReviewList.appendChild(item);
   }
+}
+
+function insertOcrReviewIssue(text) {
+  const issue = String(text || "").trim();
+  if (!issue || !state.currentReviewId) return;
+  if (elements.reviewText.value.includes(issue)) {
+    elements.reviewText.focus();
+    setSaveStatus("该问题已在审核结果中");
+    return;
+  }
+  const end = elements.reviewText.value.length;
+  elements.reviewText.setSelectionRange(end, end);
+  insertAtCursor(issue);
 }
 
 async function jumpToOcrReviewCheck(key) {
@@ -1011,6 +1044,7 @@ function resetOcrState(itemId = "") {
   state.ocrReviewHighlights = {};
   state.ocrItemId = itemId;
   state.ocrLoadToken += 1;
+  state.ocrPrefetchToken += 1;
   elements.ocrOverlay.innerHTML = "";
   elements.ocrStatus.textContent = itemId ? "OCR 识别中" : "OCR 等待中";
   setOcrProgress(itemId ? "准备识别" : "等待资料", 0, Boolean(itemId));
@@ -1057,6 +1091,7 @@ function renderOcrHighlights() {
 
 async function loadOcrHighlights(item, pdfLoadToken) {
   const ocrLoadToken = state.ocrLoadToken;
+  const prefetchToken = state.ocrPrefetchToken;
   if (!state.ocrEnabled || !item?.hasPdf) return;
   elements.ocrStatus.textContent = "OCR 识别中";
   startOcrProgress(state.pdfDocument?.numPages || 0);
@@ -1076,6 +1111,7 @@ async function loadOcrHighlights(item, pdfLoadToken) {
     elements.ocrStatus.textContent = totalMatches ? `共标注 ${totalMatches} 处` : "未找到可靠匹配";
     setOcrProgress("5 项完成", 100, false);
     renderOcrHighlights();
+    void prefetchUpcomingOcr(item, prefetchToken);
   } catch (error) {
     if (pdfLoadToken !== state.pdfLoadToken || ocrLoadToken !== state.ocrLoadToken) return;
     stopOcrProgress();
@@ -1083,6 +1119,20 @@ async function loadOcrHighlights(item, pdfLoadToken) {
     elements.ocrStatus.title = error.message;
     setOcrProgress("识别失败", 100, false);
     renderOcrReviewRail();
+  }
+}
+
+async function prefetchUpcomingOcr(currentItem, token) {
+  if (!state.ocrEnabled || token !== state.ocrPrefetchToken) return;
+  const filtered = getFilteredItems();
+  const currentIndex = filtered.findIndex((item) => item.id === currentItem?.id);
+  if (currentIndex < 0) return;
+  const candidates = filtered.slice(currentIndex + 1).filter((item) => item.hasPdf).slice(0, 2);
+  for (const candidate of candidates) {
+    if (!state.ocrEnabled || token !== state.ocrPrefetchToken) return;
+    try {
+      await api(`/api/ocr/${encodeURIComponent(candidate.id)}`);
+    } catch {}
   }
 }
 

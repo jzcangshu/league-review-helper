@@ -57,7 +57,7 @@ function normalizeYear(rawYear, dominantYear) {
   const raw = String(rawYear || "");
   const numeric = Number(raw);
   if (raw.length === 4 && numeric >= 2000 && numeric <= 2099) {
-    if (dominantYear && Math.abs(numeric - dominantYear) > 10 && editDistance(raw, String(dominantYear)) <= 1) {
+    if (dominantYear && Math.abs(numeric - dominantYear) >= 10 && editDistance(raw, String(dominantYear)) <= 1) {
       return { year: dominantYear, inferred: true };
     }
     return { year: numeric, inferred: false };
@@ -158,6 +158,11 @@ function formatDate(date) {
   return `${date.year}-${String(date.month).padStart(2, "0")}${date.day ? `-${String(date.day).padStart(2, "0")}` : ""}${date.inferred ? "?" : ""}`;
 }
 
+function formatMonth(date) {
+  if (!date) return "未识别";
+  return `${date.year}-${String(date.month).padStart(2, "0")}${date.inferred ? "?" : ""}`;
+}
+
 function addHighlight(highlights, entry, kind, target) {
   if (!entry?.page || !entry.boxes?.length) return;
   if (!highlights[entry.page]) highlights[entry.page] = [];
@@ -197,33 +202,41 @@ export function analyzeOcrReview(ocrData, declarationMatches = {}) {
     page ? extractDates(page, dominantYear) : { dates: [], incompleteLines: [] }
   ]));
   const highlights = {};
+  const recognitionWarnings = [];
+  for (const [role, page] of Object.entries(pageObjects)) {
+    if (!page) continue;
+    if (role === "study" || role === "application") continue;
+    const bottomLimit = role === "secretary" ? page.height * 0.82 : Number.POSITIVE_INFINITY;
+    const incomplete = extracted[role].incompleteLines.filter((entry) => entry.y < bottomLimit);
+    const uncertain = extracted[role].dates.filter((entry) =>
+      entry.uncertain &&
+      entry.y < bottomLimit &&
+      !incomplete.some((line) => Math.abs(line.y - entry.y) <= Math.max(8, line.boxes[0].height * 0.5)));
+    for (const entry of [...incomplete, ...uncertain]) {
+      recognitionWarnings.push(entry);
+      addHighlight(highlights, entry, "warning", "日期识别不完整，请人工确认");
+    }
+  }
 
   const birthLine = pageObjects.experience?.lines?.find((line) => normalizeText(line.text).includes("出生年月"));
   const birthData = birthLine
     ? extractDates({ page: pages.experience, lines: [birthLine] }, null).dates.find((date) => date.precision === "month" || date.precision === "day")
     : null;
-  const studyDates = extracted.study.dates;
-  const earliestStudy = studyDates.length
-    ? [...studyDates].sort((left, right) => monthValue(left) - monthValue(right) || (left.day || 0) - (right.day || 0))[0]
-    : null;
   let age;
-  if (!pageObjects.experience || !pageObjects.study || !birthData || !earliestStudy) {
-    age = checkResult("年龄", "pending", "出生年月或首次团课日期未完整识别", pages.experience || pages.study);
-  } else if (extracted.study.incompleteLines.some((line) => line.y < earliestStudy.y)) {
-    age = checkResult("年龄", "pending", `较早记录日期不完整 · ${formatDate(birthData)} → ${formatDate(earliestStudy)}`, pages.study);
-  } else {
-    const ageMonths = monthValue(earliestStudy) - monthValue(birthData);
-    const passed = ageMonths >= 14 * 12;
-    age = checkResult("年龄", passed ? "pass" : "fail", `${formatDate(birthData)} → ${formatDate(earliestStudy)} · ${Math.floor(ageMonths / 12)}岁${ageMonths % 12}个月`, passed ? pages.study : pages.experience, {
-      focus: passed ? earliestStudy.boxes[0] : birthData.boxes[0]
+  if (!pageObjects.experience || !birthData) {
+    const warning = recognitionWarnings.find((entry) => entry.page === pages.experience);
+    age = checkResult("年龄门槛", "pending", "出生年月识别不完整，无法计算14周岁月份", pages.experience, {
+      focus: warning?.boxes?.[0]
     });
-    if (!passed) {
-      addHighlight(highlights, birthData, "error", "首次团课时未满14周岁");
-      addHighlight(highlights, earliestStudy, "error", "首次团课时未满14周岁");
-    }
+  } else {
+    const earliestAllowed = { ...birthData, year: birthData.year + 14 };
+    age = checkResult("年龄门槛", "pass", `出生 ${formatMonth(birthData)} · 首次团课不得早于 ${formatMonth(earliestAllowed)}`, pages.experience, {
+      focus: birthData.boxes[0],
+      reviewText: ""
+    });
   }
 
-  const sequenceRoles = ["study", "applicationSecond", "introducer", "secretary"];
+  const sequenceRoles = ["applicationSecond", "introducer", "secretary"];
   const sequence = [];
   let incompleteCount = 0;
   for (const role of sequenceRoles) {
@@ -234,6 +247,15 @@ export function analyzeOcrReview(ocrData, declarationMatches = {}) {
     sequence.push(...pageDates);
     incompleteCount += pageDates.filter((date) => date.uncertain).length;
     incompleteCount += extracted[role].incompleteLines.filter((line) => line.y < bottomLimit).length;
+  }
+  const missingDateRoles = sequenceRoles.filter((role) =>
+    pageObjects[role] && !extracted[role].dates.length && !extracted[role].incompleteLines.length);
+  for (const role of missingDateRoles) {
+    const keyword = { applicationSecond: "本人签名", introducer: "介绍人签名", secretary: "支部书记签名" }[role];
+    const line = pageObjects[role].lines.find((entry) => normalizeText(entry.text).includes(keyword));
+    const entry = { page: pages[role], boxes: [lineBox(line)].filter(Boolean) };
+    recognitionWarnings.push(entry);
+    addHighlight(highlights, entry, "warning", "此页未可靠识别到日期");
   }
   const orderIssues = [];
   let previous = null;
@@ -246,11 +268,20 @@ export function analyzeOcrReview(ocrData, declarationMatches = {}) {
     previous = current;
   }
   const missingSequencePages = sequenceRoles.filter((role) => !pageObjects[role]).length;
+  const sequencePageNumbers = new Set(sequenceRoles.map((role) => pages[role]).filter(Boolean));
+  const sequenceWarning = recognitionWarnings.find((entry) => sequencePageNumbers.has(entry.page));
   const dateOrder = orderIssues.length
-    ? checkResult("日期顺序", "fail", `${orderIssues.length}处倒序${incompleteCount ? ` · ${incompleteCount}处待确认` : ""}`, orderIssues[0].page, { issueCount: orderIssues.length, focus: orderIssues[0].boxes[0] })
-    : incompleteCount || missingSequencePages
-      ? checkResult("日期顺序", "pending", `${incompleteCount}处日期不完整${missingSequencePages ? ` · 缺${missingSequencePages}类页面` : ""}`, sequence[0]?.page || pages.study, { issueCount: 0 })
-      : checkResult("日期顺序", "pass", `${sequence.length}个日期顺序正常`, pages.study, { issueCount: 0 });
+    ? checkResult("后续日期", "fail", `签名及审批日期未按时间顺序 · ${orderIssues.length}处异常${incompleteCount ? ` · ${incompleteCount}处待确认` : ""}`, orderIssues[0].page, {
+      issueCount: orderIssues.length,
+      focus: orderIssues[0].boxes[0],
+      reviewText: "入团志愿签名及后续审批日期未按时间顺序"
+    })
+    : incompleteCount || missingSequencePages || missingDateRoles.length || !sequence.length
+      ? checkResult("后续日期", "pending", `${incompleteCount}处日期识别不完整${missingDateRoles.length ? ` · ${missingDateRoles.length}页未识别日期` : ""}${missingSequencePages ? ` · 缺${missingSequencePages}类页面` : ""}`, sequenceWarning?.page || sequence[0]?.page || pages.applicationSecond, {
+        issueCount: 0,
+        focus: sequenceWarning?.boxes?.[0]
+      })
+      : checkResult("后续日期", "pass", `${sequence.length}个签名及审批日期顺序正常`, pages.applicationSecond, { issueCount: 0 });
 
   const declarationCounts = {
     application: declarationCount(declarationMatches, pages.application) + declarationCount(declarationMatches, pages.applicationSecond),
@@ -268,8 +299,9 @@ export function analyzeOcrReview(ocrData, declarationMatches = {}) {
   const declaration = checkResult(
     "信仰声明",
     declarationMissingPage ? "pending" : declarationPassed ? "pass" : "fail",
-    declarationDetail,
-    declarationPage
+    `${declarationPassed ? "数量符合" : "声明缺失"} · ${declarationDetail}`,
+    declarationPage,
+    { reviewText: declarationPassed || declarationMissingPage ? "" : "入团志愿书信仰声明填写不完整" }
   );
 
   const secretaryPage = pageObjects.secretary;
@@ -286,11 +318,15 @@ export function analyzeOcrReview(ocrData, declarationMatches = {}) {
     normalizeText(date.lineText).includes("算起"));
   let joinDate;
   if (!secretaryPage || !secretaryDate?.day || !approvalDate?.day) {
-    joinDate = checkResult("入团日期", "pending", "书记签名日期或审批入团日期未完整识别", pages.secretary);
+    const warning = recognitionWarnings.find((entry) => entry.page === pages.secretary);
+    joinDate = checkResult("入团日期", "pending", "书记签名日期或审批入团日期识别不完整", pages.secretary, {
+      focus: warning?.boxes?.[0]
+    });
   } else {
     const same = dayValue(secretaryDate) === dayValue(approvalDate);
-    joinDate = checkResult("入团日期", same ? "pass" : "fail", `${formatDate(secretaryDate)} ↔ ${formatDate(approvalDate)}`, pages.secretary, {
-      focus: same ? approvalDate.boxes[0] : secretaryDate.boxes[0]
+    joinDate = checkResult("入团日期", same ? "pass" : "fail", `${same ? "日期一致" : "日期不一致"} · ${formatDate(secretaryDate)} ↔ ${formatDate(approvalDate)}`, pages.secretary, {
+      focus: same ? approvalDate.boxes[0] : secretaryDate.boxes[0],
+      reviewText: same ? "" : "支部大会通过日期与上级团委审批入团日期不一致"
     });
     if (!same) {
       addHighlight(highlights, secretaryDate, "error", "入团日期不一致");
@@ -307,18 +343,17 @@ export function analyzeOcrReview(ocrData, declarationMatches = {}) {
       page: pages.secretary,
       boxes: [lineBox(activistLine)].filter(Boolean)
     };
-    addHighlight(highlights, activistEntry, "notice", "确认入团积极分子日期");
+    addHighlight(highlights, activistEntry, "warning", "积极分子月份需与首次团课人工核对");
     const activistDate = extractDates({ page: pages.secretary, lines: [activistLine] }, dominantYear).dates[0];
-    if (!activistDate || !earliestStudy) {
-      activist = checkResult("积极分子", "pending", "积极分子月份或首次团课日期未完整识别", pages.secretary, {
+    if (!activistDate) {
+      activist = checkResult("积极分子", "pending", "积极分子月份识别不完整，请人工核对", pages.secretary, {
         focus: activistEntry.boxes[0]
       });
     } else {
-      const passed = monthValue(activistDate) <= monthValue(earliestStudy);
-      activist = checkResult("积极分子", passed ? "pass" : "fail", `${formatDate(activistDate)} ${passed ? "≤" : ">"} ${formatDate(earliestStudy)}`, pages.secretary, {
-        focus: activistEntry.boxes[0]
+      activist = checkResult("积极分子", "pending", `识别月份 ${formatMonth(activistDate)} · 请与首次团课人工核对`, pages.secretary, {
+        focus: activistEntry.boxes[0],
+        reviewText: ""
       });
-      if (!passed) addHighlight(highlights, activistEntry, "error", "积极分子日期晚于首次团课");
     }
   }
 

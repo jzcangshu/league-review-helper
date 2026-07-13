@@ -45,7 +45,7 @@ def crop_text_line(image: np.ndarray, polygon: list[list[int]]) -> np.ndarray:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--pdf", required=True)
-    parser.add_argument("--scale", type=float, default=2.5)
+    parser.add_argument("--scale", type=float, default=3.5)
     args = parser.parse_args()
 
     with contextlib.redirect_stdout(sys.stderr):
