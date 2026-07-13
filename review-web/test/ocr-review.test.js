@@ -13,6 +13,14 @@ function page(pageNumber, lines) {
   return { page: pageNumber, width: 1200, height: 1800, lines };
 }
 
+function chineseIdForDate(date, sequence = "001") {
+  const first17 = `110105${date}${sequence}`;
+  const weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
+  const checks = "10X98765432";
+  const sum = [...first17].reduce((total, digit, index) => total + Number(digit) * weights[index], 0);
+  return `${first17}${checks[sum % 11]}`;
+}
+
 test("review analysis locates pages by exact keywords instead of page numbers", async () => {
   const { analyzeOcrReview } = await import("../public/ocr-review.js");
   const ocrData = { pages: [
@@ -46,6 +54,53 @@ test("review analysis locates pages by exact keywords instead of page numbers", 
   });
   assert.equal(result.checks.age.status, "pass");
   assert.equal(result.checks.declaration.status, "pass");
+});
+
+test("birth month is read from a separate OCR line in the same table row", async () => {
+  const { analyzeOcrReview } = await import("../public/ocr-review.js");
+  const result = analyzeOcrReview({ pages: [page(3, [
+    line("民族", 120, 300, 120, 50),
+    line("汉族", 300, 304, 120, 50),
+    line("出生年月", 560, 302, 180, 50),
+    line("2011年9月", 780, 305, 190, 50)
+  ])] }, {});
+  assert.equal(result.checks.age.status, "pass");
+  assert.equal(result.checks.age.detail, "首次团课不可早于\n2025年9月");
+});
+
+test("a valid Chinese ID restores a birth month when OCR drops a year digit", async () => {
+  const { analyzeOcrReview } = await import("../public/ocr-review.js");
+  const id = chineseIdForDate("20110707");
+  const result = analyzeOcrReview({ pages: [page(3, [
+    line("出生年月201年7月7日", 560, 300, 420, 60),
+    line("居民身份证号码", 220, 620, 260, 50),
+    line(id, 540, 620, 420, 50)
+  ])] }, {});
+  assert.equal(result.checks.age.status, "pass");
+  assert.equal(result.checks.age.detail, "首次团课不可早于\n2025年7月");
+});
+
+test("an invalid ID cannot turn an incomplete birth date into a pass", async () => {
+  const { analyzeOcrReview } = await import("../public/ocr-review.js");
+  const validId = chineseIdForDate("20110707");
+  const invalidId = `${validId.slice(0, -1)}${validId.endsWith("0") ? "1" : "0"}`;
+  const result = analyzeOcrReview({ pages: [page(3, [
+    line("出生年月201年7月7日", 560, 300, 420, 60),
+    line("居民身份证号码", 220, 620, 260, 50),
+    line(invalidId, 540, 620, 420, 50)
+  ])] }, {});
+  assert.equal(result.checks.age.status, "pending");
+});
+
+test("a complete birth field takes priority over a different valid ID date", async () => {
+  const { analyzeOcrReview } = await import("../public/ocr-review.js");
+  const result = analyzeOcrReview({ pages: [page(3, [
+    line("出生年月2011年8月", 560, 300, 420, 60),
+    line("居民身份证号码", 220, 620, 260, 50),
+    line(chineseIdForDate("20110707"), 540, 620, 420, 50)
+  ])] }, {});
+  assert.equal(result.checks.age.status, "pass");
+  assert.equal(result.checks.age.detail, "首次团课不可早于\n2025年8月");
 });
 
 test("introducer declarations on a merged page do not satisfy the application declaration", async () => {

@@ -37,18 +37,122 @@ function findPage(pages, keyword, exactLine = false) {
   })) || null;
 }
 
-function extractBirthMonth(line, pageNumber) {
-  const text = String(line?.text || "")
+function normalizedDateText(value) {
+  return String(value || "")
+    .normalize("NFKC")
     .replace(/[OoＯ]/g, "0")
     .replace(/[Il|｜]/g, "1");
-  const match = /(20\d{2})\s*年\s*(\d{1,2})\s*月/.exec(text);
+}
+
+function parseBirthMonthText(value) {
+  const text = normalizedDateText(value);
+  const patterns = [
+    /((?:19|20)\d{2})\s*年\s*(\d{1,2})\s*月/,
+    /((?:19|20)\d{2})\s*[.\-/]\s*(\d{1,2})(?:\s*[.\-/月]|\b)/,
+    /((?:19|20)\d{2})(0[1-9]|1[0-2])(?:[0-3]\d)?/
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(text);
+    if (!match) continue;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (month < 1 || month > 12) continue;
+    return { year, month, start: match.index, end: match.index + match[0].length };
+  }
+  return null;
+}
+
+function linesInSameRow(page, anchorLine) {
+  const anchor = lineBox(anchorLine);
+  if (!anchor) return [];
+  const anchorCenter = anchor.y + anchor.height / 2;
+  const tolerance = Math.max(anchor.height * 0.9, page.height * 0.012);
+  return (page.lines || [])
+    .map((line) => ({ line, box: lineBox(line) }))
+    .filter((entry) => entry.box && Math.abs(entry.box.y + entry.box.height / 2 - anchorCenter) <= tolerance)
+    .sort((left, right) => left.box.x - right.box.x);
+}
+
+function boxesForCombinedMatch(entries, start, end) {
+  const boxes = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const length = String(entry.line.text || "").length;
+    const overlapStart = Math.max(start, offset);
+    const overlapEnd = Math.min(end, offset + length);
+    if (overlapStart < overlapEnd) {
+      const box = substringBox(entry.line, overlapStart - offset, overlapEnd - offset);
+      if (box) boxes.push(box);
+    }
+    offset += length;
+  }
+  return boxes;
+}
+
+function extractBirthFromRow(page, headerLine, pageNumber) {
+  const entries = linesInSameRow(page, headerLine);
+  const text = entries.map((entry) => String(entry.line.text || "")).join("");
+  const parsed = parseBirthMonthText(text);
+  if (!parsed) return null;
+  const boxes = boxesForCombinedMatch(entries, parsed.start, parsed.end);
+  if (!boxes.length) return null;
+  return { year: parsed.year, month: parsed.month, page: pageNumber, boxes, source: "birth" };
+}
+
+function validChineseIdDate(value) {
+  const id = normalizedDateText(value).replace(/[^0-9Xx]/g, "").toUpperCase();
+  const match = /(\d{17}[0-9X])/.exec(id);
   if (!match) return null;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  if (month < 1 || month > 12) return null;
-  const box = substringBox(line, match.index, match.index + match[0].length);
-  if (!box) return null;
-  return { year, month, page: pageNumber, boxes: [box] };
+  const candidate = match[1];
+  const weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
+  const checks = "10X98765432";
+  const sum = weights.reduce((total, weight, index) => total + Number(candidate[index]) * weight, 0);
+  if (checks[sum % 11] !== candidate[17]) return null;
+  const year = Number(candidate.slice(6, 10));
+  const month = Number(candidate.slice(10, 12));
+  const day = Number(candidate.slice(12, 14));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    year < 1900 || year > 2100 ||
+    date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day
+  ) return null;
+  return { year, month, day };
+}
+
+function extractBirthFromId(page, pageNumber) {
+  const candidates = [];
+  const idHeader = (page.lines || []).find((line) => normalizeText(line.text).includes("居民身份证号码"));
+  const header = lineBox(idHeader);
+  for (const line of page.lines || []) {
+    const date = validChineseIdDate(line.text);
+    const box = lineBox(line);
+    if (!date || !box) continue;
+    const distance = header
+      ? Math.abs(box.y + box.height / 2 - (header.y + header.height / 2))
+      : box.y;
+    candidates.push({ ...date, page: pageNumber, boxes: [box], source: "id", distance });
+  }
+  candidates.sort((left, right) => left.distance - right.distance);
+  return candidates[0] || null;
+}
+
+function birthRowFocus(page, headerLine) {
+  const entries = linesInSameRow(page, headerLine);
+  const digitEntries = entries.filter((entry) => /\d/.test(normalizedDateText(entry.line.text)));
+  const boxes = (digitEntries.length ? digitEntries : entries.filter((entry) => entry.line === headerLine))
+    .map((entry) => entry.box)
+    .filter(Boolean);
+  return boxes.length ? boxes : [lineBox(headerLine)].filter(Boolean);
+}
+
+function extractBirthMonth(page, pageNumber) {
+  const headerLine = page?.lines?.find((line) => normalizeText(line.text).includes("出生年月"));
+  if (!headerLine) return null;
+  const direct = extractBirthFromRow(page, headerLine, pageNumber);
+  const fromId = extractBirthFromId(page, pageNumber);
+  if (direct) return direct;
+  if (fromId) return { ...fromId, boxes: birthRowFocus(page, headerLine), idBoxes: fromId.boxes };
+  return null;
 }
 
 function formatMonth(date) {
@@ -192,7 +296,7 @@ export function analyzeOcrReview(ocrData, declarationMatches = {}) {
   const studyFocus = lineBox(studyTitleLine);
 
   const birthLine = pageObjects.experience?.lines?.find((line) => normalizeText(line.text).includes("出生年月"));
-  const birthData = extractBirthMonth(birthLine, pages.experience);
+  const birthData = extractBirthMonth(pageObjects.experience, pages.experience);
   let age;
   if (!pageObjects.experience || !birthData) {
     const warning = { page: pages.experience, boxes: [lineBox(birthLine)].filter(Boolean) };
