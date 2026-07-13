@@ -15,41 +15,18 @@ export const OCR_TARGETS = [
     singleFragments: ["马克思主义", "宗教信仰", "任何宗教", "宗教活动"]
   },
   {
-    label: "马克思列宁主义",
-    phrases: [],
-    fragments: ["马克思", "列宁"],
-    requiredAny: ["列宁"]
-  },
-  {
-    label: "毛泽东思想",
-    phrases: [],
-    fragments: ["毛泽东", "思想"],
-    requiredAny: ["毛泽东"]
-  },
-  {
-    label: "邓小平理论",
-    phrases: [],
-    fragments: ["邓小平", "理论"],
-    requiredAny: ["邓小平"]
-  },
-  {
-    label: "三个代表重要思想",
-    phrases: [],
-    fragments: ["三个代表", "重要思想"],
-    requiredAny: ["三个代表"]
-  },
-  {
-    label: "科学发展观",
-    phrases: [],
-    fragments: ["科学", "发展观"],
-    requiredAny: ["科学"]
-  },
-  {
-    label: "习近平新时代中国特色社会主义",
-    phrases: [],
-    fragments: ["习近平", "新时代", "中国特色社会主义"],
-    requiredAny: ["习近平"]
+    label: "系列思想",
+    kind: "ideologySeries"
   }
+];
+
+const IDEOLOGY_ANCHORS = [
+  { id: "marx-lenin", phrases: ["马克思列宁主义", "马克思列宁", "列宁主义"] },
+  { id: "mao", phrases: ["毛泽东思想", "毛泽东"] },
+  { id: "deng", phrases: ["邓小平理论", "邓小平"] },
+  { id: "three-represents", phrases: ["三个代表重要思想", "三个代表"] },
+  { id: "scientific-development", phrases: ["科学发展观", "发展观"] },
+  { id: "xi-era", phrases: ["习近平新时代中国特色社会主义", "习近平", "新时代中国特色社会主义"] }
 ];
 
 export function normalizeOcrText(value) {
@@ -204,6 +181,139 @@ function boxesForRange(words, chars, startChar, endChar) {
     width: box.right - box.x,
     height: box.bottom - box.y
   }));
+}
+
+function flattenLine(line, lineIndex) {
+  const words = [];
+  const chars = [];
+  for (const word of line.words || []) {
+    const normalized = normalizeOcrText(word.text);
+    if (!normalized) continue;
+    const wordIndex = words.length;
+    words.push({ ...word, lineIndex });
+    for (let charOffset = 0; charOffset < normalized.length; charOffset += 1) {
+      chars.push({
+        char: normalized[charOffset],
+        wordIndex,
+        charOffset,
+        charCount: normalized.length
+      });
+    }
+  }
+  return { words, chars, text: chars.map((entry) => entry.char).join("") };
+}
+
+function bestIdeologyAnchor(text, anchor) {
+  let best = null;
+  for (const phrase of anchor.phrases) {
+    const normalizedPhrase = normalizeOcrText(phrase);
+    const exactIndex = text.indexOf(normalizedPhrase);
+    if (exactIndex >= 0) {
+      const candidate = {
+        id: anchor.id,
+        score: 1,
+        start: exactIndex,
+        end: exactIndex + normalizedPhrase.length - 1
+      };
+      if (!best || candidate.end - candidate.start > best.end - best.start) best = candidate;
+      continue;
+    }
+
+    const sizes = [...new Set([
+      normalizedPhrase.length - 1,
+      normalizedPhrase.length,
+      normalizedPhrase.length + 1
+    ].map((size) => Math.max(3, size)))];
+    for (let start = 0; start < text.length; start += 1) {
+      for (const size of sizes) {
+        if (start + size > text.length) continue;
+        const result = fuzzyTextScore(normalizedPhrase, text.slice(start, start + size));
+        const minimumShared = normalizedPhrase.length <= 4 ? 2 : Math.max(3, Math.ceil(normalizedPhrase.length * 0.5));
+        const minimumScore = normalizedPhrase.length <= 4 ? 0.5 : 0.46;
+        if (result.shared < minimumShared || result.score < minimumScore) continue;
+        const candidate = {
+          id: anchor.id,
+          score: result.score,
+          start,
+          end: start + size - 1
+        };
+        if (!best || candidate.score > best.score ||
+          (candidate.score === best.score && candidate.end - candidate.start > best.end - best.start)) {
+          best = candidate;
+        }
+      }
+    }
+  }
+  return best;
+}
+
+function ideologyHighlightHeight(page) {
+  const tops = (page.lines || []).map((line) =>
+    Math.min(...(line.words || []).map((word) => word.y))).filter(Number.isFinite).sort((left, right) => left - right);
+  const gaps = [];
+  for (let index = 1; index < tops.length; index += 1) {
+    const gap = tops[index] - tops[index - 1];
+    if (gap >= page.height * 0.008 && gap <= page.height * 0.08) gaps.push(gap);
+  }
+  gaps.sort((left, right) => left - right);
+  const typicalPitch = gaps.length ? gaps[Math.floor(gaps.length / 2)] : page.height * 0.03;
+  return Math.max(page.height * 0.012, typicalPitch * 0.82);
+}
+
+function findIdeologySeriesMatches(page, target) {
+  const matchedLines = (page.lines || []).map((line, lineIndex) => {
+    const flattened = flattenLine(line, lineIndex);
+    if (!flattened.text) return null;
+    const anchors = IDEOLOGY_ANCHORS
+      .map((anchor) => bestIdeologyAnchor(flattened.text, anchor))
+      .filter(Boolean)
+      .sort((left, right) => left.start - right.start);
+    if (!anchors.length) return null;
+    const top = Math.min(...flattened.words.map((word) => word.y));
+    const bottom = Math.max(...flattened.words.map((word) => word.y + word.height));
+    return { lineIndex, ...flattened, anchors, top, bottom };
+  }).filter(Boolean);
+
+  const groups = [];
+  for (const line of matchedLines) {
+    const previousGroup = groups[groups.length - 1];
+    const previousLine = previousGroup?.lines[previousGroup.lines.length - 1];
+    const normalLineHeight = previousLine ? Math.max(previousLine.bottom - previousLine.top, line.bottom - line.top) : 0;
+    const isAdjacent = previousLine &&
+      line.lineIndex <= previousLine.lineIndex + 1 &&
+      line.top - previousLine.bottom <= normalLineHeight * 1.5;
+    if (isAdjacent && previousGroup.lines.length < 3) previousGroup.lines.push(line);
+    else groups.push({ lines: [line] });
+  }
+
+  const candidates = groups.map((group) => {
+    const uniqueAnchors = new Set(group.lines.flatMap((line) => line.anchors.map((anchor) => anchor.id)));
+    const anchorCount = group.lines.reduce((sum, line) => sum + line.anchors.length, 0);
+    const strongestLine = Math.max(...group.lines.map((line) => line.anchors.length));
+    const qualifies = uniqueAnchors.size >= 2 && strongestLine >= 2;
+    if (!qualifies) return null;
+    const maximumHeight = ideologyHighlightHeight(page);
+    const boxes = group.lines.map((line) => {
+      const start = Math.min(...line.anchors.map((anchor) => anchor.start));
+      const end = Math.max(...line.anchors.map((anchor) => anchor.end));
+      const box = boxesForRange(line.words, line.chars, start, end)[0];
+      return box ? { ...box, height: Math.min(box.height, maximumHeight) } : null;
+    }).filter(Boolean);
+    return {
+      target: target.label,
+      phrase: [...uniqueAnchors].join(" + "),
+      score: Math.min(1, uniqueAnchors.size / 4 + anchorCount / 12),
+      boxes,
+      approximate: true,
+      fragmentCount: uniqueAnchors.size
+    };
+  }).filter(Boolean);
+
+  candidates.sort((left, right) =>
+    right.fragmentCount - left.fragmentCount ||
+    right.score - left.score ||
+    left.boxes[0].y - right.boxes[0].y);
+  return candidates.slice(0, 1);
 }
 
 function bestPhraseMatches(page, target, phrase, recall = false) {
@@ -385,12 +495,16 @@ function clusterDirectMatches(directMatches, page, maximumCharacterGap = 24) {
 export function findOcrTargetMatches(page, targets = OCR_TARGETS) {
   const matches = [];
   for (const target of targets) {
-    const partialPhrases = target.phrases.filter((phrase) =>
+    if (target.kind === "ideologySeries") {
+      matches.push(...findIdeologySeriesMatches(page, target));
+      continue;
+    }
+    const partialPhrases = (target.phrases || []).filter((phrase) =>
       normalizeOcrText(phrase) !== normalizeOcrText(target.label));
     const partialMatches = partialPhrases.flatMap((phrase) => bestPhraseMatches(page, target.label, phrase));
     const fullMatches = partialMatches.length
       ? []
-      : target.phrases.flatMap((phrase) => bestPhraseMatches(page, target.label, phrase));
+      : (target.phrases || []).flatMap((phrase) => bestPhraseMatches(page, target.label, phrase));
     const directMatches = partialMatches.length ? partialMatches : fullMatches;
     if (directMatches.length) {
       matches.push(...clusterDirectMatches(directMatches, page));

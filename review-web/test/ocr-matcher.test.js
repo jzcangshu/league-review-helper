@@ -187,6 +187,83 @@ test("specific terms require their distinctive anchor", async () => {
   assert.deepEqual(matches, []);
 });
 
+test("series ideologies are highlighted as one continuous multi-line block", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const page = {
+    page: 6,
+    width: 2000,
+    height: 2800,
+    lines: [
+      {
+        text: "我的思想来源于政治理论中的马克恩列宁义、毛泽未思想，邓小平理论",
+        words: [{ text: "我的思想来源于政治理论中的马克恩列宁义、毛泽未思想，邓小平理论", x: 300, y: 1200, width: 1400, height: 160 }]
+      },
+      {
+        text: "三个代表，科学发展观和习近平新时代中国特色社会议理论，这些理论指引方向",
+        words: [{ text: "三个代表，科学发展观和习近平新时代中国特色社会议理论，这些理论指引方向", x: 280, y: 1280, width: 1500, height: 170 }]
+      }
+    ]
+  };
+  const matches = findOcrTargetMatches(page).filter((match) => match.target === "系列思想");
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].boxes.length, 2);
+  assert.deepEqual(matches[0].boxes.map((box) => box.y), [1200, 1280]);
+  assert.ok(matches[0].boxes.every((box) => box.height <= 70));
+});
+
+test("scattered generic ideology words do not produce highlights", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const page = {
+    page: 6,
+    width: 1400,
+    height: 2200,
+    lines: [
+      { text: "端正自己的思想", words: [{ text: "端正自己的思想", x: 200, y: 300, width: 400, height: 50 }] },
+      { text: "学习科学文化知识", words: [{ text: "学习科学文化知识", x: 200, y: 900, width: 500, height: 50 }] },
+      { text: "争做新时代青年", words: [{ text: "争做新时代青年", x: 200, y: 1600, width: 500, height: 50 }] }
+    ]
+  };
+  const matches = findOcrTargetMatches(page).filter((match) => match.target === "系列思想");
+  assert.deepEqual(matches, []);
+});
+
+test("series ideology boxes are cropped to the first and last anchors", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const page = {
+    page: 6,
+    width: 1600,
+    height: 2200,
+    lines: [{
+      text: "前面的普通说明文字马克思列宁主义、毛泽东思想、邓小平理论后面的普通说明文字",
+      words: [{ text: "前面的普通说明文字马克思列宁主义、毛泽东思想、邓小平理论后面的普通说明文字", x: 100, y: 700, width: 1400, height: 60 }]
+    }]
+  };
+  const matches = findOcrTargetMatches(page).filter((match) => match.target === "系列思想");
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].boxes.length, 1);
+  assert.ok(matches[0].boxes[0].x > 100);
+  assert.ok(matches[0].boxes[0].width < 1000);
+});
+
+test("default faith declaration matching keeps its precise clause behavior", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const page = {
+    page: 6,
+    width: 1400,
+    height: 2000,
+    lines: [{
+      text: "姓名只信仰马克思主义无其他宗教信仰未参加任何宗教活动后续文字",
+      words: [{ text: "姓名只信仰马克思主义无其他宗教信仰未参加任何宗教活动后续文字", x: 100, y: 500, width: 1100, height: 60 }]
+    }]
+  };
+  const matches = findOcrTargetMatches(page);
+  const declaration = matches.find((match) => match.target.includes("只信仰马克思主义"));
+  assert.ok(declaration);
+  assert.equal(declaration.boxes.length, 1);
+  assert.ok(declaration.boxes[0].x > 100);
+  assert.ok(declaration.boxes[0].width < 1100);
+});
+
 test("document matching uses exact page keywords instead of fixed page offsets", async () => {
   const { findDocumentOcrMatches } = await import("../public/ocr-matcher.js");
   const page = (pageNumber, texts) => ({
