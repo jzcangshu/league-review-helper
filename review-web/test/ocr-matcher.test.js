@@ -317,6 +317,42 @@ test("faith declaration accepts the common 宗教感情 OCR confusion", async ()
   assert.equal(declaration.phrase, "宗教感情");
 });
 
+test("faith declaration fuzzy anchors tolerate one typo or missing character", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const cases = [
+    "声明内容为宗教感青",
+    "声明内容为宗教感",
+    "声明内容为宗教活幼",
+    "声明内容为宗教活"
+  ];
+  for (const text of cases) {
+    const page = {
+      page: 6,
+      width: 1400,
+      height: 2000,
+      lines: [{ text, words: [{ text, x: 100, y: 500, width: 1000, height: 60 }] }]
+    };
+    const declaration = findOcrTargetMatches(page)
+      .find((match) => match.target.includes("只信仰马克思主义"));
+    assert.ok(declaration, text);
+    assert.ok(declaration.boxes[0].width < 600, text);
+  }
+});
+
+test("faith declaration fuzzy anchors do not accept a generic religious phrase", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const text = "学校近期调整宗教安排并开展常规教育";
+  const page = {
+    page: 6,
+    width: 1400,
+    height: 2000,
+    lines: [{ text, words: [{ text, x: 100, y: 500, width: 1000, height: 60 }] }]
+  };
+  const declarations = findOcrTargetMatches(page)
+    .filter((match) => match.target.includes("只信仰马克思主义"));
+  assert.deepEqual(declarations, []);
+});
+
 test("faith declaration fallback keeps two separated occurrences", async () => {
   const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
   const page = {

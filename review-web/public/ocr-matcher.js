@@ -22,7 +22,8 @@ export const OCR_TARGETS = [
 ];
 
 const FAITH_DECLARATION_LABEL = OCR_TARGETS[0].label;
-const FAITH_FALLBACK_EXACT_PHRASES = ["宗教信仰", "宗教感情"];
+const FAITH_FALLBACK_EXACT_PHRASES = ["宗教信仰", "宗教感情", "宗教活动"];
+const FAITH_FALLBACK_FUZZY_PHRASES = ["宗教信仰", "宗教感情", "宗教活动"];
 
 const IDEOLOGY_ANCHORS = [
   { id: "marx-lenin", phrases: ["马克思列宁主义", "马克思列宁", "列宁主义"] },
@@ -233,14 +234,16 @@ function faithFallbackLineMatches(line, lineIndex, target) {
     }
   }
 
-  const shortTarget = normalizeOcrText("宗教信仰");
-  for (let start = 0; start < flattened.text.length; start += 1) {
-    for (const size of [3, 4, 5]) {
-      if (start + size > flattened.text.length) continue;
-      const candidateText = flattened.text.slice(start, start + size);
-      const result = fuzzyTextScore(shortTarget, candidateText);
-      if (result.shared < 3 || result.score < 0.68) continue;
-      addCandidate(start, start + size - 1, "宗教信仰", result.score);
+  for (const phrase of FAITH_FALLBACK_FUZZY_PHRASES) {
+    const shortTarget = normalizeOcrText(phrase);
+    for (let start = 0; start < flattened.text.length; start += 1) {
+      for (const size of [3, 4, 5]) {
+        if (start + size > flattened.text.length) continue;
+        const candidateText = flattened.text.slice(start, start + size);
+        const result = fuzzyTextScore(shortTarget, candidateText);
+        if (result.shared < 3 || result.score < 0.68) continue;
+        addCandidate(start, start + size - 1, phrase, result.score);
+      }
     }
   }
 
