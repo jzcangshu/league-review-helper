@@ -104,5 +104,42 @@ test("incomplete dates remain pending instead of being treated as compliant", as
   assert.equal(result.checks.age.detail, "出生 2011-12 · 首次团课不得早于 2025-12");
   assert.equal(result.checks.dateOrder.status, "pending");
   assert.equal(result.checks.joinDate.status, "pending");
-  assert.deepEqual(result.highlights[2] || [], []);
+  assert.ok(result.highlights[2].some((entry) => entry.kind === "warning"));
+});
+
+test("study hours prefer proof-column row count over inconsistent hour text", async () => {
+  const { analyzeOcrReview } = await import("../public/ocr-review.js");
+  const rows = Array.from({ length: 8 }, (_, index) => {
+    const y = 320 + index * 140;
+    return [
+      line(index < 2 ? "1h" : index === 2 ? "1" : "i", 720, y, 70, 42),
+      line(["张老师", "章老师", "张老帅", "张老师", "张老师", "章老师", "张老师", "张老师"][index], 930, y, 130, 42)
+    ];
+  }).flat();
+  const result = analyzeOcrReview({ pages: [page(4, [
+    line("团课学习记录", 420, 80, 300, 42),
+    line("学时", 710, 200, 100, 42),
+    line("证明人", 920, 200, 140, 42),
+    ...rows
+  ])] }, {});
+  assert.equal(result.checks.studyHours.status, "pass");
+  assert.match(result.checks.studyHours.detail, /证明人记录 8 条/);
+  assert.match(result.checks.studyHours.detail, /学时“1”识别 3 条/);
+});
+
+test("study hours below eight provide a review phrase and red target", async () => {
+  const { analyzeOcrReview } = await import("../public/ocr-review.js");
+  const rows = Array.from({ length: 7 }, (_, index) => {
+    const y = 320 + index * 140;
+    return [line("1学时", 720, y, 80, 42), line("李老师", 930, y, 130, 42)];
+  }).flat();
+  const result = analyzeOcrReview({ pages: [page(4, [
+    line("团课学习记录", 420, 80, 300, 42),
+    line("学时", 710, 200, 100, 42),
+    line("证明人", 920, 200, 140, 42),
+    ...rows
+  ])] }, {});
+  assert.equal(result.checks.studyHours.status, "fail");
+  assert.equal(result.checks.studyHours.reviewText, "团课学习记录不足8学时");
+  assert.ok(result.highlights[4].some((entry) => entry.kind === "error"));
 });

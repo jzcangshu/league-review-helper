@@ -6,7 +6,7 @@ function normalizeText(value) {
 }
 
 function lineBox(line) {
-  const words = line.words || [];
+  const words = line?.words || [];
   if (!words.length) return null;
   const left = Math.min(...words.map((word) => Number(word.x) || 0));
   const top = Math.min(...words.map((word) => Number(word.y) || 0));
@@ -185,6 +185,73 @@ function checkResult(label, status, detail, page, extra = {}) {
   return { label, status, detail, page: page || null, ...extra };
 }
 
+function countDistinctRows(entries, pageHeight) {
+  const rows = [];
+  for (const entry of [...entries].sort((left, right) => left.y - right.y)) {
+    if (!rows.some((rowY) => Math.abs(rowY - entry.y) <= pageHeight * 0.025)) rows.push(entry.y);
+  }
+  return rows.length;
+}
+
+function analyzeStudyHours(page) {
+  if (!page) return checkResult("团课学时", "pending", "未定位到团课学习记录页", null);
+  const titleLine = page.lines.find((line) => normalizeText(line.text).includes("学习记录"));
+  const title = lineBox(titleLine);
+  const findHeaderBelowTitle = (text) => page.lines
+    .filter((line) => normalizeText(line.text) === text && lineBox(line)?.y > (title?.y || -1))
+    .sort((left, right) => lineBox(left).y - lineBox(right).y)[0];
+  const hourHeaderLine = findHeaderBelowTitle("学时");
+  const witnessHeaderLine = findHeaderBelowTitle("证明人");
+  const hourHeader = lineBox(hourHeaderLine);
+  const witnessHeader = lineBox(witnessHeaderLine);
+  if (!hourHeader || !witnessHeader) {
+    const focus = title;
+    return checkResult("团课学时", "pending", "学时列或证明人列识别不完整", Number(page.page), { focus });
+  }
+
+  const belowHeader = (box, header) =>
+    box.y > header.y + header.height * 0.6 && box.y < page.height * 0.9;
+  const nearColumn = (box, header, ratio) => {
+    const center = box.x + box.width / 2;
+    const headerCenter = header.x + header.width / 2;
+    return Math.abs(center - headerCenter) <= page.width * ratio;
+  };
+  const hourEntries = [];
+  const witnessEntries = [];
+  for (const line of page.lines || []) {
+    const box = lineBox(line);
+    if (!box) continue;
+    const text = normalizeText(line.text);
+    if (belowHeader(box, hourHeader) && nearColumn(box, hourHeader, 0.075) && /^1(?:h|学时)?$/i.test(text)) {
+      hourEntries.push({ ...box, y: box.y });
+    }
+    if (
+      belowHeader(box, witnessHeader) &&
+      nearColumn(box, witnessHeader, 0.09) &&
+      text !== "证明人" &&
+      text.length <= 12 &&
+      /\p{Script=Han}/u.test(text)
+    ) {
+      witnessEntries.push({ ...box, y: box.y });
+    }
+  }
+  const hourCount = countDistinctRows(hourEntries, page.height);
+  const witnessCount = countDistinctRows(witnessEntries, page.height);
+  const count = Math.max(hourCount, witnessCount);
+  const source = witnessCount >= hourCount ? "证明人记录" : "学时记录";
+  const detail = `${source} ${count} 条 · 学时“1”识别 ${hourCount} 条`;
+  if (count >= 8) {
+    return checkResult("团课学时", "pass", `不少于8学时 · ${detail}`, Number(page.page), { focus: hourHeader });
+  }
+  if (count >= 4) {
+    return checkResult("团课学时", "fail", `不足8学时 · ${detail}`, Number(page.page), {
+      focus: hourHeader,
+      reviewText: "团课学习记录不足8学时"
+    });
+  }
+  return checkResult("团课学时", "pending", `仅可靠识别 ${count} 条记录，请人工确认`, Number(page.page), { focus: hourHeader });
+}
+
 export function analyzeOcrReview(ocrData, declarationMatches = {}) {
   const allPages = ocrData?.pages || [];
   const pageObjects = {
@@ -234,6 +301,13 @@ export function analyzeOcrReview(ocrData, declarationMatches = {}) {
       focus: birthData.boxes[0],
       reviewText: ""
     });
+  }
+
+  const studyHours = analyzeStudyHours(pageObjects.study);
+  if (studyHours.status === "fail") {
+    addHighlight(highlights, { page: studyHours.page, boxes: [studyHours.focus].filter(Boolean) }, "error", "团课学习记录不足8学时");
+  } else if (studyHours.status === "pending") {
+    addHighlight(highlights, { page: studyHours.page, boxes: [studyHours.focus].filter(Boolean) }, "warning", "团课学时记录需人工确认");
   }
 
   const sequenceRoles = ["applicationSecond", "introducer", "secretary"];
@@ -359,7 +433,7 @@ export function analyzeOcrReview(ocrData, declarationMatches = {}) {
 
   return {
     pages,
-    checks: { age, dateOrder, declaration, joinDate, activist },
+    checks: { age, studyHours, dateOrder, declaration, joinDate, activist },
     highlights,
     progress: 100
   };
