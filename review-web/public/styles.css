@@ -523,6 +523,15 @@ button.primary:hover {
   line-height: 1.7;
 }
 
+.note-list strong {
+  font-weight: 800;
+}
+
+.note-list .note-alert {
+  color: #c91f1f;
+  font-style: normal;
+}
+
 .raw-notes {
   margin-top: 10px;
   color: var(--muted);

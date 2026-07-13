@@ -234,7 +234,12 @@
         <strong>编辑审核注意事项</strong>
         <button id="closeNotesDialogButton" class="icon-button" type="button">×</button>
       </div>
-      <textarea id="notesEditor" spellcheck="false"></textarea>
+      <textarea
+        id="notesEditor"
+        spellcheck="false"
+        title="每行一项；【文字】或 **文字** 加粗，*文字* 标红；编号由页面自动生成"
+        placeholder="每行一项，无需填写编号"
+      ></textarea>
       <div class="dialog-actions">
         <span id="notesMessage" class="hint"></span>
         <button id="saveNotesButton" class="primary" type="button">保存</button>

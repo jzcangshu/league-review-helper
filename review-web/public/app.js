@@ -3,6 +3,7 @@ import { shouldAutoMarkReviewed } from "/review-timing.js";
 import { findDocumentOcrMatches, transformOcrBox } from "/ocr-matcher.js";
 import { analyzeOcrReview } from "/ocr-review.js";
 import { classifyImportDecisions, importCandidateNames } from "/import-decisions.js";
+import { parseNoteMarkdown } from "/note-markdown.js";
 import { createThumbnailRenderQueue } from "/thumbnail-render-queue.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/vendor/pdf.worker.mjs";
@@ -947,7 +948,17 @@ function renderNotes() {
   elements.noteList.innerHTML = "";
   for (const line of state.notes) {
     const item = document.createElement("li");
-    item.textContent = line.replace(/^(?:第?[一二三四五六七八九十百\d]+[.．、])\s*/, "");
+    const content = line.replace(/^(?:第?[一二三四五六七八九十百\d]+[.．、])\s*/, "");
+    for (const token of parseNoteMarkdown(content)) {
+      if (token.type === "text") {
+        item.appendChild(document.createTextNode(token.text));
+        continue;
+      }
+      const segment = document.createElement(token.type === "strong" ? "strong" : "span");
+      if (token.type === "alert") segment.className = "note-alert";
+      segment.textContent = token.text;
+      item.appendChild(segment);
+    }
     elements.noteList.appendChild(item);
   }
 }
