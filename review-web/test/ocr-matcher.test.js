@@ -187,26 +187,27 @@ test("specific terms require their distinctive anchor", async () => {
   assert.deepEqual(matches, []);
 });
 
-test("document matching searches likely form pages without drawing section fallbacks", async () => {
+test("document matching uses exact page keywords instead of fixed page offsets", async () => {
   const { findDocumentOcrMatches } = await import("../public/ocr-matcher.js");
-  const page = (pageNumber, text) => ({
+  const page = (pageNumber, texts) => ({
     page: pageNumber,
     width: 1000,
     height: 1400,
-    lines: [{ text, words: [{ text, x: 50, y: 80, width: 300, height: 40 }] }]
+    lines: (Array.isArray(texts) ? texts : [texts]).map((text, index) => ({
+      text,
+      words: [{ text, x: 50, y: 80 + index * 70, width: 300, height: 40 }]
+    }))
   });
   const matches = findDocumentOcrMatches({ pages: [
-    page(6, "入团志愿"),
+    page(6, ["入团志愿", "马克思列宁主义"]),
     page(7, "马克思列宁主义"),
-    page(8, "姓名 联系电话 单位"),
-    page(9, "会议认为"),
-    page(10, "备注"),
-    page(11, "说明 马克思列宁主义")
+    page(15, ["本人签名", "马克思列宁主义"]),
+    page(22, ["介绍人签名", "马克思列宁主义"]),
+    page(30, ["支部书记签名", "马克思列宁主义"])
   ] }, [{ label: "马克思列宁主义", phrases: ["马克思列宁主义"], fragments: ["马克思", "列宁"] }]);
-  assert.equal(matches[6].length, 0);
-  assert.equal(matches[7][0].target, "马克思列宁主义");
-  assert.equal(matches[8].length, 0);
-  assert.equal(matches[9].length, 0);
-  assert.equal(matches[10].length, 0);
-  assert.deepEqual(matches[11], []);
+  assert.equal(matches[6][0].target, "马克思列宁主义");
+  assert.deepEqual(matches[7], []);
+  assert.equal(matches[15][0].target, "马克思列宁主义");
+  assert.equal(matches[22][0].target, "马克思列宁主义");
+  assert.equal(matches[30][0].target, "马克思列宁主义");
 });

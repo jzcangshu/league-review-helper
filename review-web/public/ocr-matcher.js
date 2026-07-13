@@ -417,18 +417,19 @@ export function findDocumentOcrMatches(ocrData, targets = OCR_TARGETS) {
   const pages = ocrData.pages || [];
   const relevantPages = new Set();
   for (const page of pages) {
-    const hasApplicationHeading = (page.lines || []).some((line) => {
+    const isRelevantPage = (page.lines || []).some((line) => {
       const text = normalizeOcrText(line.text);
-      return text === "入团志愿";
+      return text === "入团志愿" ||
+        text.includes("本人签名") ||
+        text.includes("介绍人签名") ||
+        text.includes("支部书记签名");
     });
-    if (hasApplicationHeading) {
-      for (let offset = 0; offset <= 4; offset += 1) relevantPages.add(page.page + offset);
-    }
+    if (isRelevantPage) relevantPages.add(page.page);
   }
   return Object.fromEntries(pages.map((page) => [
     page.page,
     (() => {
-      if (relevantPages.size && !relevantPages.has(page.page)) return [];
+      if (!relevantPages.has(page.page)) return [];
       return findOcrTargetMatches(page, targets);
     })()
   ]));
