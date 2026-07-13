@@ -12,13 +12,17 @@ export const OCR_TARGETS = [
       "宗教信仰", "未参加", "任何宗教", "宗教活动"
     ],
     minimumFragments: 1,
-    singleFragments: ["马克思主义", "宗教信仰", "任何宗教", "宗教活动"]
+    singleFragments: ["宗教信仰", "宗教活动"],
+    requiredAny: ["只信仰", "无其他", "其他宗教", "宗教信仰", "任何宗教", "宗教活动"]
   },
   {
     label: "系列思想",
     kind: "ideologySeries"
   }
 ];
+
+const FAITH_DECLARATION_LABEL = OCR_TARGETS[0].label;
+const FAITH_FALLBACK_EXACT_PHRASES = ["宗教信仰", "宗教感情"];
 
 const IDEOLOGY_ANCHORS = [
   { id: "marx-lenin", phrases: ["马克思列宁主义", "马克思列宁", "列宁主义"] },
@@ -201,6 +205,77 @@ function flattenLine(line, lineIndex) {
     }
   }
   return { words, chars, text: chars.map((entry) => entry.char).join("") };
+}
+
+function faithFallbackLineMatches(line, lineIndex, target) {
+  const flattened = flattenLine(line, lineIndex);
+  if (!flattened.text) return [];
+  const candidates = [];
+  const addCandidate = (start, end, phrase, score) => {
+    candidates.push({
+      target: target.label,
+      phrase,
+      score,
+      start,
+      end,
+      boxes: boxesForRange(flattened.words, flattened.chars, start, end),
+      approximate: true,
+      faithFallback: true
+    });
+  };
+
+  for (const phrase of FAITH_FALLBACK_EXACT_PHRASES) {
+    const normalizedPhrase = normalizeOcrText(phrase);
+    let start = flattened.text.indexOf(normalizedPhrase);
+    while (start >= 0) {
+      addCandidate(start, start + normalizedPhrase.length - 1, phrase, 1);
+      start = flattened.text.indexOf(normalizedPhrase, start + normalizedPhrase.length);
+    }
+  }
+
+  const shortTarget = normalizeOcrText("宗教信仰");
+  for (let start = 0; start < flattened.text.length; start += 1) {
+    for (const size of [3, 4, 5]) {
+      if (start + size > flattened.text.length) continue;
+      const candidateText = flattened.text.slice(start, start + size);
+      const result = fuzzyTextScore(shortTarget, candidateText);
+      if (result.shared < 3 || result.score < 0.68) continue;
+      addCandidate(start, start + size - 1, "宗教信仰", result.score);
+    }
+  }
+
+  const longTarget = normalizeOcrText("不存在宗教信仰");
+  for (let start = 0; start < flattened.text.length; start += 1) {
+    for (const size of [5, 6, 7, 8]) {
+      if (start + size > flattened.text.length) continue;
+      const candidateText = flattened.text.slice(start, start + size);
+      const result = fuzzyTextScore(longTarget, candidateText);
+      const negationEvidence = sharedCharacterCount("不存在", candidateText) >= 2;
+      const faithEvidence = candidateText.includes("教") && [..."信仰感情"].some((char) => candidateText.includes(char));
+      if (!negationEvidence || !faithEvidence || result.shared < 4 || result.score < 0.64) continue;
+      addCandidate(start, start + size - 1, "不存在宗教信仰", result.score);
+    }
+  }
+
+  candidates.sort((left, right) =>
+    right.score - left.score ||
+    (left.end - left.start) - (right.end - right.start) ||
+    left.start - right.start);
+  const selected = [];
+  for (const candidate of candidates) {
+    const overlaps = selected.some((match) => candidate.start <= match.end && candidate.end >= match.start);
+    if (!overlaps) selected.push(candidate);
+  }
+  return selected;
+}
+
+function findFaithDeclarationFallbackMatches(page, target) {
+  const candidates = (page.lines || []).flatMap((line, lineIndex) =>
+    faithFallbackLineMatches(line, lineIndex, target));
+  candidates.sort((left, right) =>
+    Math.min(...left.boxes.map((box) => box.y)) - Math.min(...right.boxes.map((box) => box.y)) ||
+    Math.min(...left.boxes.map((box) => box.x)) - Math.min(...right.boxes.map((box) => box.x)));
+  return candidates.slice(0, 3);
 }
 
 function bestIdeologyAnchor(text, anchor) {
@@ -506,23 +581,33 @@ export function findOcrTargetMatches(page, targets = OCR_TARGETS) {
       ? []
       : (target.phrases || []).flatMap((phrase) => bestPhraseMatches(page, target.label, phrase));
     const directMatches = partialMatches.length ? partialMatches : fullMatches;
+    let selectedMatches = [];
     if (directMatches.length) {
-      matches.push(...clusterDirectMatches(directMatches, page));
-      continue;
+      selectedMatches = clusterDirectMatches(directMatches, page);
     }
-    const targetMatches = findFragmentClusters(page, target);
-    targetMatches.sort((left, right) => right.score - left.score);
-    const selected = [];
-    for (const candidate of targetMatches) {
-      const existing = selected.find((match) => matchesOverlap(candidate, match) || matchesSameLine(candidate, match));
-      if (existing) {
-        existing.boxes = lineBoxes([existing, candidate], page);
-        existing.score = Math.max(existing.score, candidate.score);
-        continue;
+    if (!selectedMatches.length) {
+      const targetMatches = findFragmentClusters(page, target);
+      targetMatches.sort((left, right) => right.score - left.score);
+      for (const candidate of targetMatches) {
+        const existing = selectedMatches.find((match) => matchesOverlap(candidate, match) || matchesSameLine(candidate, match));
+        if (existing) {
+          existing.boxes = lineBoxes([existing, candidate], page);
+          existing.score = Math.max(existing.score, candidate.score);
+          continue;
+        }
+        selectedMatches.push(candidate);
       }
-      selected.push(candidate);
     }
-    matches.push(...selected.slice(0, 3));
+    if (target.label === FAITH_DECLARATION_LABEL) {
+      const fallbackMatches = findFaithDeclarationFallbackMatches(page, target);
+      for (const fallback of fallbackMatches) {
+        if (!selectedMatches.some((existing) => matchesOverlap(existing, fallback))) {
+          selectedMatches.push(fallback);
+        }
+      }
+      selectedMatches.sort((left, right) => centerY(left) - centerY(right));
+    }
+    matches.push(...selectedMatches.slice(0, 3));
   }
   return matches;
 }

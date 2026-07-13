@@ -264,6 +264,127 @@ test("default faith declaration matching keeps its precise clause behavior", asy
   assert.ok(declaration.boxes[0].width < 1100);
 });
 
+test("faith declaration falls back to a fuzzy no-religion phrase", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const page = {
+    page: 6,
+    width: 1400,
+    height: 2000,
+    lines: [{
+      text: "本人不存在忠教信昂并自觉遵守组织要求",
+      words: [{ text: "本人不存在忠教信昂并自觉遵守组织要求", x: 100, y: 500, width: 1000, height: 60 }]
+    }]
+  };
+  const matches = findOcrTargetMatches(page);
+  const declaration = matches.find((match) => match.target.includes("只信仰马克思主义"));
+  assert.ok(declaration);
+  assert.equal(declaration.faithFallback, true);
+  assert.ok(declaration.boxes[0].x > 150);
+  assert.ok(declaration.boxes[0].width < 600);
+});
+
+test("faith declaration fallback allows missing characters", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const page = {
+    page: 6,
+    width: 1400,
+    height: 2000,
+    lines: [{
+      text: "本人不存宗教信仰并自觉遵守组织要求",
+      words: [{ text: "本人不存宗教信仰并自觉遵守组织要求", x: 100, y: 500, width: 950, height: 60 }]
+    }]
+  };
+  const matches = findOcrTargetMatches(page);
+  const declaration = matches.find((match) => match.target.includes("只信仰马克思主义"));
+  assert.ok(declaration);
+});
+
+test("faith declaration accepts the common 宗教感情 OCR confusion", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const page = {
+    page: 6,
+    width: 1400,
+    height: 2000,
+    lines: [{
+      text: "本人不存在宗教感情并积极参加集体活动",
+      words: [{ text: "本人不存在宗教感情并积极参加集体活动", x: 100, y: 500, width: 980, height: 60 }]
+    }]
+  };
+  const matches = findOcrTargetMatches(page);
+  const declaration = matches.find((match) => match.target.includes("只信仰马克思主义"));
+  assert.ok(declaration);
+  assert.equal(declaration.faithFallback, true);
+  assert.equal(declaration.phrase, "宗教感情");
+});
+
+test("faith declaration fallback keeps two separated occurrences", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const page = {
+    page: 8,
+    width: 1400,
+    height: 2000,
+    lines: [
+      { text: "该同学不存在宗教感情", words: [{ text: "该同学不存在宗教感情", x: 100, y: 450, width: 600, height: 60 }] },
+      { text: "该同学不存宗教信昂", words: [{ text: "该同学不存宗教信昂", x: 100, y: 1350, width: 600, height: 60 }] }
+    ]
+  };
+  const declarations = findOcrTargetMatches(page)
+    .filter((match) => match.target.includes("只信仰马克思主义"));
+  assert.equal(declarations.length, 2);
+  assert.ok(Math.min(...declarations[0].boxes.map((box) => box.y)) < 700);
+  assert.ok(Math.min(...declarations[1].boxes.map((box) => box.y)) > 1200);
+});
+
+test("faith declaration fallback does not duplicate an existing precise match", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const page = {
+    page: 6,
+    width: 1400,
+    height: 2000,
+    lines: [{
+      text: "姓名只信仰马克思主义无其他宗教信仰未参加任何宗教活动",
+      words: [{ text: "姓名只信仰马克思主义无其他宗教信仰未参加任何宗教活动", x: 100, y: 500, width: 1100, height: 60 }]
+    }]
+  };
+  const declarations = findOcrTargetMatches(page)
+    .filter((match) => match.target.includes("只信仰马克思主义"));
+  assert.equal(declarations.length, 1);
+  assert.notEqual(declarations[0].faithFallback, true);
+});
+
+test("faith declaration accepts religious activity text on its own", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const page = {
+    page: 6,
+    width: 1400,
+    height: 2000,
+    lines: [{
+      text: "学校不存在宗教活动安排并定期开展纪律教育",
+      words: [{ text: "学校不存在宗教活动安排并定期开展纪律教育", x: 100, y: 500, width: 1050, height: 60 }]
+    }]
+  };
+  const declarations = findOcrTargetMatches(page)
+    .filter((match) => match.target.includes("只信仰马克思主义"));
+  assert.equal(declarations.length, 1);
+  assert.equal(declarations[0].phrase, "宗教活动");
+});
+
+test("faith declaration does not accept Marxism on its own", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const page = {
+    page: 6,
+    width: 1400,
+    height: 2000,
+    lines: [{
+      text: "本人认真学习马克思主义理论并积极参加集体活动",
+      words: [{ text: "本人认真学习马克思主义理论并积极参加集体活动", x: 100, y: 500, width: 1050, height: 60 }]
+    }]
+  };
+  const declarations = findOcrTargetMatches(page)
+    .filter((match) => match.target.includes("只信仰马克思主义"));
+  assert.deepEqual(declarations, []);
+});
+
 test("document matching uses exact page keywords instead of fixed page offsets", async () => {
   const { findDocumentOcrMatches } = await import("../public/ocr-matcher.js");
   const page = (pageNumber, texts) => ({
