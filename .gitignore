@@ -5,8 +5,8 @@
 !/.gitignore
 !/LICENSE
 !/README.md
-!/start-review.cmd
 !/start-review.ps1
+!/双击我启动审核软件.cmd
 !/注意事项.txt
 !/codex-skills/
 !/examples/

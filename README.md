@@ -37,7 +37,7 @@
 从 GitHub Release（GitHub 发行版）下载源码压缩包并解压，然后双击：
 
 ~~~text
-start-review.cmd
+双击我启动审核软件.cmd
 ~~~
 
 首次启动会自动安装网页依赖。启动完成后会打开本地地址：
@@ -288,7 +288,16 @@ python codex-skills/league-review-prep/scripts/prepare_school_review.py --school
 
 ### 双击启动没有反应
 
-在项目目录打开 Windows Terminal（Windows 终端），运行：
+请使用根目录的 `双击我启动审核软件.cmd`。启动失败时窗口会停留并显示错误，不会自动关闭。
+
+服务自身的错误还会写入：
+
+~~~text
+review-web/start-review-error.log
+review-web/start-review-output.log
+~~~
+
+也可以在项目目录打开 Windows Terminal（Windows 终端），运行：
 
 ~~~powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\start-review.ps1
