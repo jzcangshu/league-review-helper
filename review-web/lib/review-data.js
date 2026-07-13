@@ -38,7 +38,9 @@ function detectResultColumns(headers) {
   const rules = [
     { priority: 1, label: "问题备注", matches: (header) => header === "问题备注" },
     { priority: 2, label: "问题", matches: (header) => header === "问题" },
-    { priority: 3, label: "包含问题", matches: (header) => header.includes("问题") }
+    { priority: 3, label: "包含问题", matches: (header) => header.includes("问题") },
+    { priority: 4, label: "审核意见", matches: (header) => ["审核意见", "审核结果", "审核备注"].includes(header) },
+    { priority: 5, label: "备注", matches: (header) => header === "备注" }
   ];
 
   for (const rule of rules) {
@@ -98,11 +100,19 @@ function stableSourceId(school, folderPath) {
 function migrateSource(source) {
   const school = String(source?.school || "").trim();
   const folderPath = String(source?.folderPath || source?.folderRelativePath || "").trim();
+  const layout = source?.excelLayout && typeof source.excelLayout === "object" ? source.excelLayout : {};
   return {
     id: String(source?.id || stableSourceId(school, folderPath)),
     school,
     folderPath,
     excelPath: String(source?.excelPath || "").trim(),
+    excelLayout: layout.sheet ? {
+      sheet: String(layout.sheet),
+      headerRow: Number(layout.headerRow) || 1,
+      nameColumn: Number.isInteger(layout.nameColumn) ? layout.nameColumn : 0,
+      resultColumn: Number.isInteger(layout.resultColumn) ? layout.resultColumn : -1,
+      confirmed: Boolean(layout.confirmed)
+    } : null,
     active: source?.active !== false,
     createdAt: source?.createdAt || null,
     updatedAt: source?.updatedAt || null

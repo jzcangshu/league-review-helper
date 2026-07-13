@@ -42,4 +42,32 @@ test("writes school results and appends missing names only once", async () => {
   assert.equal(check.getWorksheet("名单").getCell("B2").value, "新结果");
   assert.equal(check.getWorksheet("名单").getCell("B3").value, null);
   assert.equal(check.getWorksheet("名单").getCell("B4").value, "未审核");
+  assert.equal(first.excelPath, excelPath);
+  assert.equal(first.folderPath, root);
+});
+
+test("write-back reuses an exact generic remarks column", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "league-review-export-remarks-"));
+  const excelPath = path.join(root, "名单.xlsx");
+  const reviewDir = path.join(root, "审核结果", "示例中学");
+  await fs.mkdir(reviewDir, { recursive: true });
+  const reviewPath = path.join(reviewDir, "张三_审核结果.txt");
+  await fs.writeFile(reviewPath, "新审核意见", "utf8");
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("名单");
+  sheet.addRow(["序号", "姓名", "备注"]);
+  sheet.addRow([1, "张三", "旧审核意见"]);
+  await workbook.xlsx.writeFile(excelPath);
+
+  const result = await writeSchoolResultsToExcel({
+    workspaceRoot: root,
+    school: "示例中学",
+    excelPath,
+    items: [{ studentName: "张三", reviewed: true, reviewPath, pdfPath: path.join(root, "张三.pdf") }]
+  });
+  assert.equal(result.resultColumn, "备注");
+  const check = new ExcelJS.Workbook();
+  await check.xlsx.readFile(excelPath);
+  assert.equal(check.getWorksheet("名单").getCell("C2").value, "新审核意见");
+  assert.equal(check.getWorksheet("名单").getCell("D1").value, null);
 });

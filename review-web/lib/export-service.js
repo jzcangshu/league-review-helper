@@ -21,7 +21,18 @@ async function writeSchoolResultsToExcel(options) {
   if (path.extname(excelPath).toLowerCase() !== ".xlsx") {
     throw new Error("带宏 Excel 无法安全自动回填，请先另存为 .xlsx。");
   }
-  const roster = await inspectWorkbook(excelPath, options.resultColumn || "");
+  const layout = { ...(options.layout || {}) };
+  if (layout.resultColumn < 0) delete layout.resultColumn;
+  const roster = await inspectWorkbook(excelPath, {
+    resultColumn: options.resultColumn || "",
+    layout
+  });
+  if (roster.layout.needsConfirmation) {
+    return {
+      needsLayoutConfirmation: true,
+      layoutWarnings: roster.layout.warnings
+    };
+  }
   if (roster.resultDetection.ambiguous && !options.resultColumn) {
     return {
       needsResultColumn: true,
@@ -103,7 +114,16 @@ async function writeSchoolResultsToExcel(options) {
     pending,
     missing,
     appended: additions.length,
-    backupPath
+    backupPath,
+    excelPath,
+    folderPath: path.dirname(excelPath),
+    layout: {
+      sheet: roster.sheet,
+      headerRow: roster.headerRow,
+      nameColumn: roster.nameColumn,
+      resultColumn,
+      confirmed: true
+    }
   };
 }
 

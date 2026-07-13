@@ -426,7 +426,7 @@ button.primary:hover {
   grid-template-columns: minmax(0, 1fr) minmax(170px, 240px) auto;
   gap: 8px;
   align-items: center;
-  min-height: 108px;
+  min-height: 78px;
 }
 
 .export-row select {
@@ -436,6 +436,39 @@ button.primary:hover {
 
 #exportStatus {
   margin-top: 3px;
+}
+
+.export-status {
+  padding: 6px 8px;
+  border-left: 3px solid transparent;
+  line-height: 1.35;
+}
+
+.export-status.working {
+  border-left-color: var(--warn);
+  color: var(--warn);
+  background: #fff5df;
+}
+
+.export-status.success {
+  border-left-color: var(--ok);
+  color: var(--ok);
+  background: #e4f3e8;
+  font-weight: 700;
+}
+
+.export-status.error {
+  border-left-color: var(--danger);
+  color: var(--danger);
+  background: #fde8e5;
+  font-weight: 700;
+}
+
+.export-open-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 .note-list {
@@ -986,6 +1019,52 @@ button.primary:hover {
   margin-bottom: 7px;
 }
 
+.excel-layout-editor {
+  display: grid;
+  grid-template-columns: minmax(130px, 1.1fr) 110px minmax(140px, 1fr) minmax(170px, 1.2fr) auto;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: #f8f3eb;
+}
+
+.excel-layout-editor.needs-attention {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px rgba(180, 35, 24, 0.12);
+}
+
+.excel-layout-editor label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.excel-layout-editor label > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.excel-layout-editor select,
+.excel-layout-editor input {
+  width: 100%;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.excel-layout-message {
+  margin-bottom: 8px;
+  color: var(--ok);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.excel-layout-message.error {
+  color: var(--danger);
+}
+
 .history-preview-table {
   width: 100%;
   border-collapse: collapse;
@@ -1009,6 +1088,28 @@ button.primary:hover {
 
 .history-preview-table th {
   background: #f3eee5;
+}
+
+.history-preview-table tr.suspicious td {
+  color: var(--danger);
+  background: #fde8e5;
+  font-weight: 700;
+}
+
+.history-name-correction {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px;
+  border-color: var(--danger);
+  background: #fff;
+}
+
+.history-preview-table td small {
+  display: block;
+  margin-top: 4px;
+  color: var(--danger);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .analysis-confirm-actions {

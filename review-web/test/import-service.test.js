@@ -207,3 +207,35 @@ test("uses the PDF name as canonical and updates the Excel roster name", async (
   assert.equal(workbook.getWorksheet("名单").getCell("A2").value, "张珊");
   assert.equal(await fs.readFile(path.join(fixture.reviewRoot, "示例中学", "张珊_审核结果.txt"), "utf8"), "");
 });
+
+test("confirmed preview correction is backed up and written to the original Excel row", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "league-review-row-fix-"));
+  const pdfDir = path.join(root, "资料");
+  const reviewRoot = path.join(root, "审核结果");
+  const excelPath = path.join(root, "名单.xlsx");
+  await fs.mkdir(pdfDir, { recursive: true });
+  await fs.writeFile(path.join(pdfDir, "张珊.pdf"), "%PDF-1.4\n", "utf8");
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("名单");
+  sheet.addRow(["姓名", "问题备注"]);
+  sheet.addRow(["张三→张珊？", "学校复审意见"]);
+  await workbook.xlsx.writeFile(excelPath);
+
+  const analysis = await analyzeImport({
+    workspaceRoot: root,
+    reviewRoot,
+    school: "示例中学",
+    pdfDir,
+    excelPath,
+    layout: { sheet: "名单", headerRow: 1, nameColumn: 0, resultColumn: 1, confirmed: true },
+    rowOverrides: { 2: { name: "张珊" } }
+  });
+  assert.equal(analysis.items[0].matchKind, "exact");
+  const result = await commitImport({ analysis });
+  assert.equal(result.renamed, 1);
+  assert.ok(result.excelBackupPath);
+
+  const check = new ExcelJS.Workbook();
+  await check.xlsx.readFile(excelPath);
+  assert.equal(check.getWorksheet("名单").getCell("A2").value, "张珊");
+});

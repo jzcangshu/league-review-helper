@@ -35,6 +35,12 @@ If automatic discovery chooses the wrong file or folder, rerun with explicit pat
 python codex-skills/league-review-prep/scripts/prepare_school_review.py --school "学校名" --excel "学校/名单.xlsx" --pdf-dir "学校/资料目录" --update-web-sources
 ```
 
+The script scans up to 80 rows, recognizes common name headers such as `姓名`, `学生姓名`, `团员姓名`, and supports headers spanning up to three rows. It stops when the selected name column contains suspicious non-name values. For an unusual workbook, specify the layout explicitly instead of guessing:
+
+```powershell
+python codex-skills/league-review-prep/scripts/prepare_school_review.py --excel "学校/名单.xlsx" --sheet "名单" --header-row 3 --name-column B --pdf-dir "学校/资料目录"
+```
+
 Use the bundled Python from `load_workspace_dependencies` when available. The script requires `openpyxl`.
 
 ## Completed Review Export
@@ -52,6 +58,8 @@ Target-column choice order:
 1. Prefer the exact header `问题备注`.
 2. Otherwise use the exact header `问题`.
 3. Otherwise use the only header containing `问题`.
+4. Otherwise use the exact header `审核意见`, `审核结果`, or `审核备注`.
+5. Otherwise use the exact header `备注`.
 
 The script applies the same priority when `--result-column` is omitted for manual runs, but it never creates a missing column. Multiple candidates at the same priority are treated as ambiguous; rerun with `--result-column`.
 

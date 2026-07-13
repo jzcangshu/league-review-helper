@@ -51,6 +51,7 @@ const state = {
   pdfResizeObserver: null,
   exportSchool: "",
   exportExcelPath: "",
+  lastExport: null,
   ocrEnabled: true,
   ocrData: null,
   ocrMatches: {},
@@ -75,6 +76,7 @@ const elementIds = [
   "historyPreviewContainer", "recognitionSummary", "reportOutput", "analysisWizardMessage", "analysisBackButton",
   "analysisNextButton", "confirmImportButton", "finishAnalysisButton",
   "exportSchoolLabel", "exportStatus", "exportResultColumnSelect", "writeBackExcelButton",
+  "exportOpenActions", "openExportFileButton", "openExportFolderButton",
   "shortcutToolTab", "exportToolTab", "shortcutToolPanel", "exportToolPanel",
   "prevPageButton", "nextPageButton", "pageIndicator", "zoomOutButton", "zoomIndicator", "zoomInButton",
   "rotateButton", "downloadButton", "ocrToggleButton", "ocrStatus", "pdfPageSurface", "ocrOverlay",
@@ -187,18 +189,31 @@ function getCurrentSchool() {
   return state.selectedSchool !== "all" ? state.selectedSchool : current?.school || "";
 }
 
+function setExportStatus(message, kind = "") {
+  elements.exportStatus.textContent = message;
+  elements.exportStatus.classList.toggle("working", kind === "working");
+  elements.exportStatus.classList.toggle("success", kind === "success");
+  elements.exportStatus.classList.toggle("error", kind === "error");
+}
+
+function hideExportOpenActions() {
+  state.lastExport = null;
+  elements.exportOpenActions.hidden = true;
+}
+
 function updateExportPanel() {
   const school = getCurrentSchool();
   if (state.exportSchool !== school) {
     state.exportSchool = school;
     state.exportExcelPath = "";
     elements.exportResultColumnSelect.hidden = true;
+    hideExportOpenActions();
   }
   elements.exportSchoolLabel.textContent = school || "尚未选择学校";
   const source = state.sources.find((item) => item.school === school && item.active);
-  if (!school) elements.exportStatus.textContent = "请先选择一所学校。";
-  else if (source?.excelExists) elements.exportStatus.textContent = "已找到该学校名单，写入前会自动备份并按姓名去重。";
-  else elements.exportStatus.textContent = "回填时请选择该学校的 Excel 名单。";
+  if (!school) setExportStatus("请先选择一所学校。");
+  else if (source?.excelExists) setExportStatus("已找到该学校名单，写入前会自动备份并按姓名去重。");
+  else setExportStatus("回填时请选择该学校的 Excel 名单。");
   elements.writeBackExcelButton.disabled = !school;
 }
 
@@ -217,7 +232,8 @@ async function writeBackCurrentSchool() {
       state.exportExcelPath = excelPath;
     }
     if (!window.confirm(`确定将“${school}”的审核结果覆盖写入所选 Excel 吗？程序会先备份原文件。`)) return;
-    elements.exportStatus.textContent = "正在备份并回填，请稍候...";
+    hideExportOpenActions();
+    setExportStatus("正在备份并回填，请稍候...", "working");
     const payload = await api("/api/export/excel", {
       method: "POST",
       body: JSON.stringify({
@@ -235,16 +251,36 @@ async function writeBackCurrentSchool() {
         elements.exportResultColumnSelect.appendChild(option);
       }
       elements.exportResultColumnSelect.hidden = false;
-      elements.exportStatus.textContent = "检测到多个问题列，请选择要覆盖写入的列后再次回填。";
+      setExportStatus("检测到多个问题列，请选择要覆盖写入的列后再次回填。", "error");
+      return;
+    }
+    if (payload.needsLayoutConfirmation) {
+      setExportStatus(`无法可靠识别名单布局：${(payload.layoutWarnings || []).join("；")}`, "error");
       return;
     }
     elements.exportResultColumnSelect.hidden = true;
-    elements.exportStatus.textContent = `回填完成：已审 ${payload.reviewed}，未审 ${payload.pending}，无资料 ${payload.missing}，新增 ${payload.appended} 人。`;
+    state.lastExport = { excelPath: payload.excelPath, folderPath: payload.folderPath };
+    elements.exportOpenActions.hidden = false;
+    const fileName = String(payload.excelPath || "").split(/[\\/]/).pop();
+    setExportStatus(`回填完成：已审 ${payload.reviewed}，未审 ${payload.pending}，无资料 ${payload.missing}，新增 ${payload.appended} 人。已保存到 ${fileName}`, "success");
     await loadSources();
   } catch (error) {
-    elements.exportStatus.textContent = `回填失败：${error.message}`;
+    setExportStatus(`回填失败：${error.message}`, "error");
   } finally {
     elements.writeBackExcelButton.disabled = false;
+  }
+}
+
+async function openExportPath(mode) {
+  const target = mode === "folder" ? state.lastExport?.folderPath : state.lastExport?.excelPath;
+  if (!target) return;
+  try {
+    await api("/api/open-path", {
+      method: "POST",
+      body: JSON.stringify({ path: target, mode })
+    });
+  } catch (error) {
+    setExportStatus(`打开失败：${error.message}`, "error");
   }
 }
 
@@ -298,7 +334,37 @@ function importPayload() {
   };
 }
 
-async function analyzeImport() {
+function compactExcelLayout(layout, confirmed = layout?.confirmed) {
+  if (!layout?.sheet) return null;
+  return {
+    sheet: layout.sheet,
+    headerRow: Number(layout.headerRow) || 1,
+    nameColumn: Number(layout.nameColumn),
+    resultColumn: Number(layout.resultColumn),
+    confirmed: Boolean(confirmed)
+  };
+}
+
+function analysisRowOverrides(analysis) {
+  return Object.fromEntries(
+    (analysis?.historyPreview || [])
+      .filter((row) => row.sourceName && row.sourceName !== row.name)
+      .map((row) => [String(row.rowNumber), { name: row.name }])
+  );
+}
+
+function excelColumnLetter(index) {
+  let value = Number(index) + 1;
+  let result = "";
+  while (value > 0) {
+    value -= 1;
+    result = String.fromCharCode(65 + value % 26) + result;
+    value = Math.floor(value / 26);
+  }
+  return result;
+}
+
+async function analyzeImport(options = {}) {
   if (!state.pdfDir || !state.excelPath) {
     setImportMessage("请先完成前两步。", true);
     return;
@@ -309,22 +375,16 @@ async function analyzeImport() {
   elements.resultColumnSelect.hidden = true;
   setImportMessage("正在核对名单与资料...");
   try {
-    const analysis = await api("/api/import/analyze", { method: "POST", body: JSON.stringify(importPayload()) });
+    const analysis = await api("/api/import/analyze", {
+      method: "POST",
+      body: JSON.stringify({
+        ...importPayload(),
+        layout: options.layout || {},
+        rowOverrides: options.rowOverrides || {}
+      })
+    });
     state.analysis = analysis;
     elements.schoolNameInput.value = analysis.school;
-    if (analysis.needsResultColumn) {
-      elements.resultColumnSelect.hidden = false;
-      elements.analyzeImportButton.hidden = false;
-      elements.resultColumnSelect.innerHTML = "";
-      for (const choice of analysis.resultColumnChoices) {
-        const option = document.createElement("option");
-        option.value = choice;
-        option.textContent = choice;
-        elements.resultColumnSelect.appendChild(option);
-      }
-      setImportMessage("检测到多个含“问题”的列，请选择正确列后继续。", true);
-      return;
-    }
     renderAnalysis(analysis);
     showImportStep(4);
   } catch (error) {
@@ -353,8 +413,108 @@ function renderHistoryPreview(analysis) {
   title.textContent = "Excel 导入审核意见预览";
   const detected = document.createElement("span");
   detected.className = "hint";
-  detected.textContent = analysis.resultColumn ? `自动识别列：${analysis.resultColumn}` : "未识别到历史问题列";
+  detected.textContent = analysis.resultColumn ? `当前读取：${analysis.resultColumn}` : "当前不读取历史审核意见";
   heading.append(title, detected);
+
+  const layout = analysis.excelLayout;
+  const editor = document.createElement("div");
+  editor.className = "excel-layout-editor";
+  const createField = (labelText, control) => {
+    const label = document.createElement("label");
+    const caption = document.createElement("span");
+    caption.textContent = labelText;
+    label.append(caption, control);
+    return label;
+  };
+  const sheetSelect = document.createElement("select");
+  sheetSelect.dataset.layoutField = "sheet";
+  for (const sheet of layout.sheets || []) {
+    const option = document.createElement("option");
+    option.value = sheet.name;
+    option.textContent = `${sheet.name}（${sheet.rowCount} 行）`;
+    sheetSelect.appendChild(option);
+  }
+  sheetSelect.value = layout.sheet;
+  const headerRowInput = document.createElement("input");
+  headerRowInput.type = "number";
+  headerRowInput.min = "1";
+  headerRowInput.value = String(layout.headerRow);
+  headerRowInput.dataset.layoutField = "headerRow";
+  headerRowInput.max = String((layout.sheets || []).find((item) => item.name === layout.sheet)?.rowCount || 1);
+  const nameColumnSelect = document.createElement("select");
+  nameColumnSelect.dataset.layoutField = "nameColumn";
+  const resultColumnSelect = document.createElement("select");
+  resultColumnSelect.dataset.layoutField = "resultColumn";
+
+  const fillColumnChoices = () => {
+    const sheet = (layout.sheets || []).find((item) => item.name === sheetSelect.value);
+    const rowNumber = Number(headerRowInput.value) || 1;
+    const rowValues = sheet?.rows?.find((row) => row.rowNumber === rowNumber)?.values || [];
+    const fallbackColumns = sheetSelect.value === layout.sheet && rowNumber === layout.headerRow ? layout.columns : [];
+    const count = Math.max(sheet?.columnCount || 0, rowValues.length, fallbackColumns.length);
+    const currentName = nameColumnSelect.value || String(layout.nameColumn);
+    const currentResult = resultColumnSelect.value || String(layout.resultColumn);
+    nameColumnSelect.innerHTML = "";
+    resultColumnSelect.innerHTML = '<option value="-1">不读取历史审核意见</option>';
+    for (let index = 0; index < count; index += 1) {
+      const fallback = fallbackColumns.find((item) => item.index === index);
+      const header = rowValues[index] || fallback?.header || "未命名列";
+      const letter = fallback?.letter || excelColumnLetter(index);
+      for (const select of [nameColumnSelect, resultColumnSelect]) {
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = `${letter} 列 · ${header}`;
+        select.appendChild(option);
+      }
+    }
+    nameColumnSelect.value = currentName;
+    resultColumnSelect.value = currentResult;
+    if (!nameColumnSelect.value && nameColumnSelect.options.length) nameColumnSelect.selectedIndex = 0;
+    if (!resultColumnSelect.value) resultColumnSelect.value = "-1";
+  };
+  fillColumnChoices();
+  sheetSelect.addEventListener("change", () => {
+    const sheet = (layout.sheets || []).find((item) => item.name === sheetSelect.value);
+    headerRowInput.max = String(sheet?.rowCount || 1);
+    fillColumnChoices();
+  });
+  headerRowInput.addEventListener("change", fillColumnChoices);
+  const apply = document.createElement("button");
+  apply.type = "button";
+  apply.className = "primary";
+  apply.textContent = "按此设置重新预览";
+  apply.addEventListener("click", async () => {
+    apply.disabled = true;
+    try {
+      await analyzeImport({
+        layout: {
+          sheet: sheetSelect.value,
+          headerRow: Number(headerRowInput.value),
+          nameColumn: Number(nameColumnSelect.value),
+          resultColumn: Number(resultColumnSelect.value),
+          confirmed: true
+        },
+        rowOverrides: Object.fromEntries(
+          [...elements.historyPreviewContainer.querySelectorAll("input[data-roster-row]")]
+            .map((input) => [input.dataset.rosterRow, { name: input.value.trim() }])
+        )
+      });
+    } finally {
+      apply.disabled = false;
+    }
+  });
+  editor.append(
+    createField("工作表", sheetSelect),
+    createField("表头所在行", headerRowInput),
+    createField("姓名列", nameColumnSelect),
+    createField("审核意见列", resultColumnSelect),
+    apply
+  );
+  const layoutMessage = document.createElement("div");
+  layoutMessage.className = `excel-layout-message${layout.needsConfirmation ? " error" : ""}`;
+  layoutMessage.textContent = layout.warnings.length
+    ? layout.warnings.join("；")
+    : `已识别 ${layout.sheet}，第 ${layout.headerRow} 行表头，共 ${analysis.summary.rosterCount} 人。`;
 
   const table = document.createElement("table");
   table.className = "history-preview-table";
@@ -362,15 +522,25 @@ function renderHistoryPreview(analysis) {
   const body = document.createElement("tbody");
   for (const item of analysis.historyPreview || []) {
     const row = document.createElement("tr");
+    if (item.suspicious) row.classList.add("suspicious");
     const name = document.createElement("td");
-    name.textContent = item.name;
+    if (item.suspicious) {
+      const input = document.createElement("input");
+      input.className = "history-name-correction";
+      input.value = item.name;
+      input.dataset.rosterRow = String(item.rowNumber);
+      input.setAttribute("aria-label", `修正第 ${item.rowNumber} 行姓名`);
+      const hint = document.createElement("small");
+      hint.textContent = "修正后会同步写回 Excel";
+      name.append(input, hint);
+    } else name.textContent = item.name;
     const problem = document.createElement("td");
     problem.textContent = item.problem || "";
     row.append(name, problem);
     body.appendChild(row);
   }
   table.appendChild(body);
-  elements.historyPreviewContainer.append(heading, table);
+  elements.historyPreviewContainer.append(heading, editor, layoutMessage, table);
 }
 
 function createRecognitionGroup(title, items, renderRow, actions = []) {
@@ -588,8 +758,12 @@ function showAnalysisPage(page) {
   elements.confirmImportButton.hidden = page !== 2;
   elements.finishAnalysisButton.hidden = page !== 3;
   elements.analysisWizardMessage.textContent = page === 1
-    ? "请确认姓名与问题两列识别正确。"
+    ? state.analysis?.excelLayout?.needsConfirmation
+      ? "自动识别不够可靠，请在上方修正设置并重新预览。"
+      : "请确认姓名与问题两列识别正确。"
     : page === 2 ? "完成所有人员处理方案后才能导入。" : "名单核对报告已生成，可直接选择文字复制。";
+  elements.analysisWizardMessage.classList.toggle("error", page === 1 && Boolean(state.analysis?.excelLayout?.needsConfirmation));
+  elements.analysisNextButton.setAttribute("aria-disabled", String(page === 1 && Boolean(state.analysis?.excelLayout?.needsConfirmation)));
   if (page === 2) updateConfirmImportState();
 }
 
@@ -664,6 +838,8 @@ async function commitImport() {
       method: "POST",
       body: JSON.stringify({
         ...importPayload(),
+        layout: compactExcelLayout(state.analysis.excelLayout, true),
+        rowOverrides: analysisRowOverrides(state.analysis),
         analysisId: state.analysis.analysisId,
         sourceId: matchingSource?.id || "",
         bindings,
@@ -1393,7 +1569,15 @@ function attachEvents() {
     elements.issuesDialog.showModal();
   });
   elements.closeIssuesDialogButton.addEventListener("click", () => elements.issuesDialog.close());
-  elements.analysisNextButton.addEventListener("click", () => showAnalysisPage(2));
+  elements.analysisNextButton.addEventListener("click", () => {
+    if (elements.analysisNextButton.getAttribute("aria-disabled") === "true") {
+      elements.analysisWizardMessage.textContent = "请先修正并应用 Excel 读取设置。";
+      elements.analysisWizardMessage.classList.add("error");
+      elements.historyPreviewContainer.querySelector(".excel-layout-editor")?.classList.add("needs-attention");
+      return;
+    }
+    showAnalysisPage(2);
+  });
   elements.analysisBackButton.addEventListener("click", () => showAnalysisPage(1));
   elements.confirmImportButton.addEventListener("click", commitImport);
   elements.finishAnalysisButton.addEventListener("click", () => {
@@ -1405,6 +1589,8 @@ function attachEvents() {
   elements.shortcutToolTab.addEventListener("click", () => showUtilityPanel("shortcuts"));
   elements.exportToolTab.addEventListener("click", () => showUtilityPanel("export"));
   elements.writeBackExcelButton.addEventListener("click", writeBackCurrentSchool);
+  elements.openExportFileButton.addEventListener("click", () => openExportPath("file"));
+  elements.openExportFolderButton.addEventListener("click", () => openExportPath("folder"));
   elements.ocrToggleButton.addEventListener("click", () => {
     state.ocrEnabled = !state.ocrEnabled;
     elements.ocrToggleButton.classList.toggle("active", state.ocrEnabled);

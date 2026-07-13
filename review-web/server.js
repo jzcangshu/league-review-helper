@@ -332,6 +332,26 @@ function runPowerShellPicker(kind) {
   });
 }
 
+async function openUserPath(inputPath, mode) {
+  const targetPath = resolveStoredPath(inputPath);
+  const stats = await fsp.stat(targetPath).catch(() => null);
+  if (!stats) throw new Error("要打开的位置不存在。");
+  if (mode === "folder") {
+    const folderPath = stats.isDirectory() ? targetPath : path.dirname(targetPath);
+    await execFileAsync("explorer.exe", [folderPath], { windowsHide: false, timeout: 15000 });
+    return folderPath;
+  }
+  if (!stats.isFile()) throw new Error("所选位置不是文件。");
+  const escaped = targetPath.replace(/'/g, "''");
+  const script = `Start-Process -FilePath '${escaped}'`;
+  const encoded = Buffer.from(script, "utf16le").toString("base64");
+  await execFileAsync("powershell.exe", ["-NoProfile", "-EncodedCommand", encoded], {
+    windowsHide: false,
+    timeout: 15000
+  });
+  return targetPath;
+}
+
 function suggestSchool(pdfDir) {
   return path.basename(pdfDir);
 }
@@ -394,7 +414,9 @@ async function start() {
           school: String(body.school || "").trim() || suggestSchool(pdfDir),
           pdfDir,
           excelPath: resolveStoredPath(body.excelPath),
-          resultColumn: body.resultColumn || ""
+          resultColumn: body.resultColumn || "",
+          layout: body.layout || {},
+          rowOverrides: body.rowOverrides || {}
         });
         const analysisId = crypto.randomUUID();
         importAnalyses.set(analysisId, analysis);
@@ -405,7 +427,13 @@ async function start() {
           workspaceRoot: undefined,
           reviewRoot: undefined,
           rosterRows: undefined,
-          historyPreview: analysis.rosterRows.map((row) => ({ name: row.name, problem: row.result })),
+          historyPreview: analysis.rosterRows.map((row) => ({
+            rowNumber: row.rowNumber,
+            name: row.name,
+            sourceName: row.sourceName,
+            problem: row.result,
+            suspicious: analysis.excelLayout.suspiciousRows.includes(row.rowNumber)
+          })),
           items: analysis.items.map((item) => ({
             pdfIndex: item.pdfIndex,
             name: item.name,
@@ -439,7 +467,9 @@ async function start() {
             school,
             pdfDir,
             excelPath,
-            resultColumn: body.resultColumn || ""
+            resultColumn: body.resultColumn || "",
+            layout: body.layout || {},
+            rowOverrides: body.rowOverrides || {}
           });
         const result = await commitImport({
           analysis,
@@ -452,6 +482,13 @@ async function start() {
           school,
           folderPath: toStoredPath(pdfDir),
           excelPath: toStoredPath(excelPath),
+          excelLayout: {
+            sheet: analysis.roster.sheet,
+            headerRow: analysis.roster.headerRow,
+            nameColumn: analysis.roster.nameColumn,
+            resultColumn: analysis.roster.resultColumn,
+            confirmed: true
+          },
           active: true,
           createdAt: now,
           updatedAt: now
@@ -476,12 +513,24 @@ async function start() {
           school,
           excelPath,
           items: schoolItems,
-          resultColumn: body.resultColumn || ""
+          resultColumn: body.resultColumn || "",
+          layout: body.layout || source?.excelLayout || {}
         });
-        if (!result.needsResultColumn && source && source.excelPath !== toStoredPath(excelPath)) {
-          await upsertSource({ ...source, excelPath: toStoredPath(excelPath), updatedAt: new Date().toISOString() });
+        if (!result.needsResultColumn && !result.needsLayoutConfirmation && source) {
+          await upsertSource({
+            ...source,
+            excelPath: toStoredPath(excelPath),
+            excelLayout: result.layout || source.excelLayout,
+            updatedAt: new Date().toISOString()
+          });
         }
         sendJson(res, 200, result);
+        return;
+      }
+      if (req.method === "POST" && pathname === "/api/open-path") {
+        const body = await readRequestBody(req);
+        const openedPath = await openUserPath(body.path, body.mode === "folder" ? "folder" : "file");
+        sendJson(res, 200, { ok: true, path: openedPath });
         return;
       }
       const sourceStateMatch = pathname.match(/^\/api\/sources\/([^/]+)\/(remove|restore)$/);

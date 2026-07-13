@@ -3,11 +3,11 @@ const fsp = require("node:fs/promises");
 const path = require("node:path");
 const ExcelJS = require("exceljs");
 const { renameReviewedName } = require("./review-status");
+const { inspectWorkbook } = require("./excel-layout");
 
 const {
   classifyReviewConflict,
   clean,
-  detectResultColumns,
   isConfidentNameMatch,
   normalizeStudentName
 } = require("./review-data");
@@ -48,65 +48,6 @@ function resolveUserPath(workspaceRoot, inputPath) {
   return path.isAbsolute(value) ? path.resolve(value) : path.resolve(workspaceRoot, value);
 }
 
-function cellText(cell) {
-  if (cell.value === null || cell.value === undefined) return "";
-  if (typeof cell.value === "object" && cell.value.richText) {
-    return cell.value.richText.map((part) => part.text).join("").trim();
-  }
-  if (typeof cell.value === "object" && cell.value.text) return String(cell.value.text).trim();
-  return String(cell.text || cell.value || "").trim();
-}
-
-async function inspectWorkbook(excelPath, requestedResultColumn = "") {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(excelPath);
-  const candidates = [];
-
-  workbook.eachSheet((sheet) => {
-    const maxHeaderRow = Math.min(sheet.rowCount, 15);
-    for (let rowNumber = 1; rowNumber <= maxHeaderRow; rowNumber += 1) {
-      const row = sheet.getRow(rowNumber);
-      const headers = [];
-      for (let column = 1; column <= sheet.columnCount; column += 1) {
-        headers.push(cellText(row.getCell(column)));
-      }
-      const nameIndex = headers.findIndex((header) => clean(header) === "姓名");
-      if (nameIndex < 0) continue;
-
-      const resultDetection = detectResultColumns(headers);
-      const requestedIndex = requestedResultColumn
-        ? headers.findIndex((header) => clean(header) === clean(requestedResultColumn))
-        : -1;
-      const resultIndex = requestedIndex >= 0 ? requestedIndex : resultDetection.selected?.index ?? -1;
-      const rows = [];
-      for (let current = rowNumber + 1; current <= sheet.rowCount; current += 1) {
-        const currentRow = sheet.getRow(current);
-        const name = clean(cellText(currentRow.getCell(nameIndex + 1)));
-        if (!name || name === "姓名") continue;
-        rows.push({
-          rowNumber: current,
-          name,
-          result: resultIndex >= 0 ? cellText(currentRow.getCell(resultIndex + 1)) : ""
-        });
-      }
-      candidates.push({
-        sheet: sheet.name,
-        headerRow: rowNumber,
-        headers,
-        nameColumn: nameIndex,
-        resultColumn: resultIndex,
-        resultHeader: resultIndex >= 0 ? headers[resultIndex] : "",
-        resultDetection,
-        rows
-      });
-    }
-  });
-
-  candidates.sort((left, right) => right.rows.length - left.rows.length);
-  if (!candidates.length) throw new Error("未在所选 Excel 中找到“姓名”列。");
-  return candidates[0];
-}
-
 function uniqueNameMatch(name, candidates) {
   if (candidates.includes(name)) return { name, kind: "exact" };
   const fuzzy = candidates.filter((candidate) => isConfidentNameMatch(name, candidate));
@@ -136,7 +77,11 @@ async function analyzeImport(options) {
 
   const pdfFiles = await listFilesRecursive(pdfDir, ".pdf");
   if (!pdfFiles.length) throw new Error("所选资料文件夹中没有 PDF 文件。");
-  const roster = await inspectWorkbook(excelPath, options.resultColumn || "");
+  const roster = await inspectWorkbook(excelPath, {
+    resultColumn: options.resultColumn || "",
+    layout: options.layout || {},
+    rowOverrides: options.rowOverrides || {}
+  });
   const pdfEntries = pdfFiles
     .map((pdfPath) => ({ pdfPath, name: normalizeStudentName(pdfPath, school) }))
     .filter((entry) => entry.name);
@@ -189,14 +134,18 @@ async function analyzeImport(options) {
     excelPath,
     resultColumn: roster.resultHeader,
     resultColumnChoices,
-    needsResultColumn: roster.resultDetection.ambiguous && !options.resultColumn,
+    needsResultColumn: roster.resultDetection.ambiguous &&
+      !options.resultColumn &&
+      !Number.isInteger(options.layout?.resultColumn),
     roster: {
       sheet: roster.sheet,
+      headerStartRow: roster.headerStartRow,
       headerRow: roster.headerRow,
       count: roster.rows.length,
       nameColumn: roster.nameColumn,
       resultColumn: roster.resultColumn
     },
+    excelLayout: roster.layout,
     rosterRows: roster.rows,
     rosterNames: excelNames,
     items,
@@ -225,12 +174,13 @@ function safeTimestamp() {
 
 async function commitImport({ analysis, bindings = {}, resolutions = {} }) {
   if (analysis.needsResultColumn) throw new Error("请先选择要读取的审核结果列。");
+  if (analysis.excelLayout?.needsConfirmation) throw new Error("请先修正 Excel 读取预览中的可疑内容。");
   if (analysis.duplicates.excel.length || analysis.duplicates.pdf.length) {
     throw new Error("名单或资料中存在重复姓名，请修正后重新检查。");
   }
   const { items: resolvedItems, appendNames, corrections } = resolveBindings(analysis, bindings);
   await validateNameCorrections(analysis, resolvedItems, corrections, appendNames);
-  const excelUpdate = await updateRosterWorkbook(analysis, appendNames, corrections);
+  const excelUpdate = await updateRosterWorkbook(analysis, appendNames, corrections, analysis.rosterRows);
   const items = await applyNameCorrections(analysis, resolvedItems, corrections);
   const schoolReviewDir = path.join(analysis.reviewRoot, analysis.school);
   await fsp.mkdir(schoolReviewDir, { recursive: true });
@@ -338,9 +288,12 @@ function resolveBindings(analysis, bindings) {
   return { items, appendNames, corrections };
 }
 
-async function updateRosterWorkbook(analysis, names, corrections = []) {
+async function updateRosterWorkbook(analysis, names, corrections = [], rosterRows = []) {
   const excelCorrections = corrections.filter((item) => item.source === "pdf" && item.excelName !== item.canonicalName);
-  if (!names.length && !excelCorrections.length) return { appended: 0, renamed: 0, backupPath: "" };
+  const manualCorrections = rosterRows.filter((row) => row.sourceName && row.sourceName !== row.name);
+  if (!names.length && !excelCorrections.length && !manualCorrections.length) {
+    return { appended: 0, renamed: 0, backupPath: "" };
+  }
   if (path.extname(analysis.excelPath).toLowerCase() !== ".xlsx") {
     throw new Error("带宏 Excel 无法安全自动修改名单，请先另存为 .xlsx 后重新导入。");
   }
@@ -373,8 +326,11 @@ async function updateRosterWorkbook(analysis, names, corrections = []) {
     if (!rosterRow) throw new Error(`无法在 Excel 中定位“${correction.excelName}”。`);
     sheet.getRow(rosterRow.rowNumber).getCell(analysis.roster.nameColumn + 1).value = correction.canonicalName;
   }
+  for (const correction of manualCorrections) {
+    sheet.getRow(correction.rowNumber).getCell(analysis.roster.nameColumn + 1).value = correction.name;
+  }
   await workbook.xlsx.writeFile(analysis.excelPath);
-  return { appended: names.length, renamed: excelCorrections.length, backupPath };
+  return { appended: names.length, renamed: excelCorrections.length + manualCorrections.length, backupPath };
 }
 
 async function appendRosterRows(analysis, names) {

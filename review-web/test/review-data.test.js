@@ -39,6 +39,13 @@ test("falls back from exact problem to a unique header containing problem", () =
   assert.equal(detectResultColumns(["姓名", "初审问题", "复审问题"]).ambiguous, true);
 });
 
+test("falls back to review aliases and exact generic remarks", () => {
+  assert.equal(detectResultColumns(["姓名", "审核意见"]).selected.header, "审核意见");
+  assert.equal(detectResultColumns(["姓名", "审核结果"]).selected.header, "审核结果");
+  assert.equal(detectResultColumns(["姓名", "备注"]).selected.header, "备注");
+  assert.equal(detectResultColumns(["姓名", "普通备注说明"]).selected, null);
+});
+
 test("classifies repeat-review conflicts conservatively", () => {
   assert.equal(classifyReviewConflict("上级团委未盖章", false, "").action, "create_from_excel");
   assert.equal(classifyReviewConflict("上级团委未盖章", true, "").action, "fill_empty");
@@ -57,6 +64,21 @@ test("migrates legacy source entries without losing compatibility", () => {
   assert.equal(source.folderPath, "examples\\示例中学\\入团申请资料");
   assert.equal(source.active, true);
   assert.ok(source.id.startsWith("school-"));
+});
+
+test("source entries preserve a confirmed Excel layout", () => {
+  const source = migrateSource({
+    school: "示例中学",
+    folderPath: "资料",
+    excelLayout: { sheet: "名单", headerRow: 3, nameColumn: 1, resultColumn: 6, confirmed: true }
+  });
+  assert.deepEqual(source.excelLayout, {
+    sheet: "名单",
+    headerRow: 3,
+    nameColumn: 1,
+    resultColumn: 6,
+    confirmed: true
+  });
 });
 
 test("disables and restores a school without removing its source", () => {

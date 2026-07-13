@@ -127,10 +127,14 @@
             <div class="export-row">
               <div>
                 <strong id="exportSchoolLabel">当前学校</strong>
-                <div id="exportStatus" class="hint">写入前会自动备份原 Excel，并按姓名去重补充名单。</div>
+                <div id="exportStatus" class="export-status hint" role="status">写入前会自动备份原 Excel，并按姓名去重补充名单。</div>
               </div>
               <select id="exportResultColumnSelect" aria-label="回填结果列" hidden></select>
               <button id="writeBackExcelButton" class="primary" type="button">回填当前学校</button>
+            </div>
+            <div id="exportOpenActions" class="export-open-actions" hidden>
+              <button id="openExportFileButton" class="small-button" type="button">打开 Excel 文件</button>
+              <button id="openExportFolderButton" class="small-button" type="button">打开所在文件夹</button>
             </div>
           </div>
         </section>
