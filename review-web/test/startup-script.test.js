@@ -15,6 +15,13 @@ test("Windows launcher uses npm.cmd and keeps startup errors visible", () => {
   assert.doesNotMatch(powershell, /& npm install/);
   assert.match(powershell, /Push-Location \$serverDir/);
   assert.doesNotMatch(powershell, /npmCommand\.Source install[^\n]*--prefix/);
+  assert.match(powershell, /nodejs\.org\/dist/);
+  assert.match(powershell, /python\.org\/ftp\/python/);
+  assert.match(powershell, /REVIEW_OCR_BASE_PYTHON/);
+  assert.match(powershell, /System\.Security\.Cryptography\.SHA256/);
+  assert.doesNotMatch(powershell, /Get-FileHash/);
+  assert.match(powershell, /installerInfo\.Length -lt 10MB/);
+  assert.match(powershell, /if \(-not \(Test-PythonRuntime \$pythonExe\)\)/);
   assert.match(powershell, /RedirectStandardError/);
   assert.match(launcher, /if not "%launchExit%"=="0"/);
   assert.match(launcher, /pause/);

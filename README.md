@@ -20,17 +20,19 @@
 
 当前版本优先支持 Windows 10/11。
 
-必需环境：
+普通用户不需要提前安装 Node.js 或 Python。首次双击启动时，程序会：
 
-- Node.js（JavaScript 运行环境）18 或更高版本。
-- npm（Node.js 包管理工具），通常会随 Node.js 一起安装。
+- 优先使用电脑中已有的 Node.js 18+ 和 Python 3.10+。
+- 缺少 Node.js 时，自动从官方网站下载便携版到软件目录。
+- 缺少 Python 时，自动从官方网站安装到软件自己的本地运行目录。
+- 自动安装网页依赖；首次启用 OCR 时继续安装 OCR 依赖并下载模型。
 
-使用 OCR 时还需要：
+整个过程不需要管理员权限，也不会修改系统 PATH（环境变量）。首次准备需要：
 
-- Python（编程语言）3.10 或更高版本。
-- 可访问 Python 软件包和 OCR 模型下载地址的网络。
+- 可访问 Node.js、Python 软件包和 OCR 模型下载地址的网络。
+- 建议预留至少 1 GB 可用空间。
 
-不使用 OCR 时，不需要提前安装 Python 依赖。
+自动下载的基础运行环境保存在 `review-web/.runtime`，OCR 环境和模型分别保存在 `review-web/.ocr-python` 与 `review-web/.ocr-models`。
 
 ### 2. 下载并启动
 
@@ -40,7 +42,7 @@
 双击我启动审核软件.cmd
 ~~~
 
-首次启动会自动安装网页依赖。启动完成后会打开本地地址：
+首次启动会自动准备缺少的运行环境和网页依赖，请保持窗口开启。启动完成后会打开本地地址：
 
 ~~~text
 http://127.0.0.1:4173
@@ -302,6 +304,8 @@ review-web/start-review-output.log
 ~~~powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\start-review.ps1
 ~~~
+
+首次自动准备环境需要联网。下载失败时可以直接再次双击，程序会继续复用已经下载或安装成功的内容。
 
 也可以进入 <code>review-web</code> 后运行 <code>npm start</code> 查看错误。
 

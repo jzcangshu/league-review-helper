@@ -29,10 +29,13 @@ async function checkRuntime(pythonPath) {
 }
 
 async function findBasePython() {
-  for (const candidate of [
+  const configuredPython = String(process.env.REVIEW_OCR_BASE_PYTHON || "").trim();
+  const candidates = [
+    ...(configuredPython ? [{ file: path.resolve(configuredPython), prefix: [] }] : []),
     { file: "python", prefix: [] },
     { file: "py", prefix: ["-3"] }
-  ]) {
+  ];
+  for (const candidate of candidates) {
     try {
       await execFileAsync(candidate.file, [...candidate.prefix, "--version"], { windowsHide: true, timeout: 10000 });
       return candidate;
