@@ -338,6 +338,50 @@ function matchesSameLine(left, right) {
   }));
 }
 
+function clusterDirectMatches(directMatches, page, maximumCharacterGap = 24) {
+  const clusters = [];
+  const sorted = [...directMatches].sort((left, right) => left.startChar - right.startChar);
+  for (const match of sorted) {
+    const cluster = clusters[clusters.length - 1];
+    const verticallyNearby = cluster?.matches.some((existing) => {
+      const existingCenter = centerY(existing);
+      return Math.abs(existingCenter - centerY(match)) <= page.height * 0.12;
+    });
+    if (cluster && verticallyNearby && match.startChar <= cluster.endChar + maximumCharacterGap) {
+      cluster.matches.push(match);
+      cluster.endChar = Math.max(cluster.endChar, match.endChar);
+    } else {
+      clusters.push({
+        startChar: match.startChar,
+        endChar: match.endChar,
+        matches: [match]
+      });
+    }
+  }
+
+  const summaries = clusters.map((cluster) => ({
+    ...cluster,
+    score: Math.max(...cluster.matches.map((match) => match.score)),
+    phraseCount: new Set(cluster.matches.map((match) => match.phrase)).size
+  }));
+  const hasMultiPhraseCluster = summaries.some((cluster) => cluster.phraseCount >= 2);
+  const bestScore = Math.max(...summaries.map((cluster) => cluster.score));
+  return summaries
+    .filter((cluster) =>
+      cluster.phraseCount >= 2 ||
+      cluster.score >= 0.92 ||
+      (!hasMultiPhraseCluster && cluster.score >= Math.max(0.68, bestScore - 0.2)))
+    .map((cluster) => {
+      const best = [...cluster.matches].sort((left, right) => right.score - left.score)[0];
+      return {
+        ...best,
+        score: cluster.score,
+        boxes: cluster.matches.length === 1 ? best.boxes : lineBoxes(cluster.matches, page)
+      };
+    })
+    .slice(0, 3);
+}
+
 export function findOcrTargetMatches(page, targets = OCR_TARGETS) {
   const matches = [];
   for (const target of targets) {
@@ -348,11 +392,11 @@ export function findOcrTargetMatches(page, targets = OCR_TARGETS) {
       ? []
       : target.phrases.flatMap((phrase) => bestPhraseMatches(page, target.label, phrase));
     const directMatches = partialMatches.length ? partialMatches : fullMatches;
-    directMatches.sort((left, right) => right.score - left.score);
-    const anchor = directMatches[0];
-    const targetMatches = anchor
-      ? directMatches.filter((candidate) => matchesOverlap(candidate, anchor) || matchesSameLine(candidate, anchor))
-      : findFragmentClusters(page, target);
+    if (directMatches.length) {
+      matches.push(...clusterDirectMatches(directMatches, page));
+      continue;
+    }
+    const targetMatches = findFragmentClusters(page, target);
     targetMatches.sort((left, right) => right.score - left.score);
     const selected = [];
     for (const candidate of targetMatches) {

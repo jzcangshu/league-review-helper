@@ -134,9 +134,37 @@ test("an exact clause is not merged with nearby approximate fragments", async ()
   }]);
   assert.equal(matches.length, 1);
   assert.equal(matches[0].boxes.length, 1);
-  assert.ok(matches[0].boxes[0].y >= 620);
+  assert.ok(matches[0].boxes[0].y >= 600);
   assert.ok(matches[0].boxes[0].x >= 500);
   assert.ok(matches[0].boxes[0].width < 780);
+});
+
+test("two separated occurrences of the declaration are both highlighted", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const page = {
+    page: 8,
+    width: 1488,
+    height: 2105,
+    lines: [
+      { text: "信仰上杜婉宁信仰马克思主义无其它宗", words: [{ text: "信仰上杜婉宁信仰马克思主义无其它宗", x: 325, y: 504, width: 924, height: 71 }] },
+      { text: "教信仰未参加任何宗教活动", words: [{ text: "教信仰未参加任何宗教活动", x: 332, y: 581, width: 611, height: 68 }] },
+      { text: "行动上踏实学习信仰上杜婉宁信仰马克思主义无其它宗教信仰未参加任", words: [{ text: "行动上踏实学习信仰上杜婉宁信仰马克思主义无其它宗教信仰未参加任", x: 305, y: 1361, width: 953, height: 76 }] },
+      { text: "何宗教活动", words: [{ text: "何宗教活动", x: 312, y: 1429, width: 251, height: 56 }] }
+    ]
+  };
+  const matches = findOcrTargetMatches(page, [{
+    label: "只信仰马克思主义，无其他宗教信仰，未参加任何宗教活动",
+    phrases: [
+      "只信仰马克思主义，无其他宗教信仰，未参加任何宗教活动",
+      "只信仰马克思主义",
+      "无其他宗教信仰",
+      "未参加任何宗教活动"
+    ],
+    fragments: ["马克思主义", "宗教信仰", "任何宗教", "宗教活动"]
+  }]);
+  assert.equal(matches.length, 2);
+  assert.ok(Math.min(...matches[0].boxes.map((box) => box.y)) < 700);
+  assert.ok(Math.min(...matches[1].boxes.map((box) => box.y)) > 1200);
 });
 
 test("specific terms require their distinctive anchor", async () => {
