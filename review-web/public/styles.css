@@ -214,15 +214,29 @@ button.primary:hover {
 
 .roster-select-row {
   display: grid;
-  grid-template-columns: minmax(120px, 170px) minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
   flex: 1 1 auto;
   min-width: 0;
 }
 
+.roster-select-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.roster-select-field label {
+  flex: 0 0 auto;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 #schoolSelect,
 #studentSelect {
-  width: 100%;
+  flex: 1 1 auto;
+  width: 0;
   min-width: 0;
 }
 
