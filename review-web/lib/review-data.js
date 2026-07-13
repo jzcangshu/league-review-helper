@@ -121,6 +121,15 @@ function isConfidentNameMatch(left, right) {
   return differences === 1;
 }
 
+function scoreStudentPdfMatch(studentName, pdfPath, school = "") {
+  const pdfName = normalizeStudentName(pdfPath, school);
+  if (pdfName === studentName) return 100;
+  if (pdfName.includes(studentName) || studentName.includes(pdfName)) return 80;
+  if (isConfidentNameMatch(pdfName, studentName)) return 70;
+  if (path.basename(pdfPath).replace(/[\s_-]+/g, "").includes(studentName)) return 60;
+  return 0;
+}
+
 function updateSourceState(sources, sourceId, active) {
   let found = false;
   const updatedAt = new Date().toISOString();
@@ -149,6 +158,7 @@ module.exports = {
   migrateSource,
   normalizeReviewContent,
   normalizeStudentName,
+  scoreStudentPdfMatch,
   stableSourceId,
   updateSourceState
 };

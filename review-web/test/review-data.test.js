@@ -7,12 +7,23 @@ const {
   isSchoolActive,
   migrateSource,
   normalizeStudentName,
+  scoreStudentPdfMatch,
   updateSourceState
 } = require("../lib/review-data");
 
 test("normalizes common class and application labels", () => {
   assert.equal(normalizeStudentName("803班 张三 入团志愿书_20260702_0001.pdf"), "张三");
   assert.equal(normalizeStudentName("转PDF-李铭申请书.pdf"), "李铭");
+  assert.equal(normalizeStudentName("801陈诺曦.pdf"), "陈诺曦");
+  assert.equal(normalizeStudentName("803彭馨凝pdf.pdf"), "彭馨凝");
+  assert.equal(normalizeStudentName("807班 杨乐妍.pdf"), "杨乐妍");
+  assert.equal(normalizeStudentName("806沈奕帆 .pdf"), "沈奕帆");
+});
+
+test("scores decorated PDF names and unique one-character variants", () => {
+  assert.equal(scoreStudentPdfMatch("王宣淇", "803班 王宣淇 入团志愿书.pdf", "23级团员资料"), 100);
+  assert.equal(scoreStudentPdfMatch("李明", "803李铭入团申请书.pdf", "示例学校"), 70);
+  assert.equal(scoreStudentPdfMatch("李明", "803王强入团申请书.pdf", "示例学校"), 0);
 });
 
 test("detects result columns by priority", () => {

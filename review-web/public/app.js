@@ -122,9 +122,7 @@ function draftKey(itemId) {
 
 function suggestSchool(inputPath) {
   const parts = String(inputPath || "").split(/[\\/]+/).filter(Boolean);
-  if (!parts.length) return "";
-  const generic = new Set(["资料", "团员资料", "入团申请资料", "入团志愿书", "PDF"]);
-  return generic.has(parts.at(-1)) && parts.length > 1 ? parts.at(-2) : parts.at(-1);
+  return parts.at(-1) || "";
 }
 
 function showImportStep(step) {
@@ -275,7 +273,7 @@ async function choosePath(kind) {
     if (kind === "folder") {
       state.pdfDir = payload.path;
       elements.pdfPathPreview.textContent = payload.path;
-      elements.schoolNameInput.value = suggestSchool(payload.path);
+      elements.schoolNameInput.value = payload.suggestedSchool || suggestSchool(payload.path);
     } else {
       state.excelPath = payload.path;
       elements.excelPathPreview.textContent = payload.path;

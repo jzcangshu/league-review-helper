@@ -15,7 +15,7 @@ const { isExplicitlyReviewed, loadReviewStatus, setReviewed } = require("./lib/r
 const {
   isSchoolActive,
   migrateSource,
-  normalizeStudentName,
+  scoreStudentPdfMatch,
   stableSourceId,
   updateSourceState
 } = require("./lib/review-data");
@@ -181,7 +181,7 @@ async function discoverSourceFolders() {
 }
 
 function addPdf(pdfBySchool, seen, school, pdfPath) {
-  const key = path.resolve(pdfPath).toLowerCase();
+  const key = `${school}\n${path.resolve(pdfPath).toLowerCase()}`;
   if (seen.has(key)) return;
   seen.add(key);
   if (!pdfBySchool.has(school)) pdfBySchool.set(school, []);
@@ -219,14 +219,6 @@ async function buildPdfMap(sources) {
   return pdfBySchool;
 }
 
-function scoreCandidate(studentName, pdfPath, school) {
-  const pdfName = normalizeStudentName(pdfPath, school);
-  if (pdfName === studentName) return 100;
-  if (pdfName.includes(studentName) || studentName.includes(pdfName)) return 80;
-  if (path.basename(pdfPath).replace(/[\s_-]+/g, "").includes(studentName)) return 60;
-  return 0;
-}
-
 async function loadNotes() {
   const raw = await fsp.readFile(notesPath, "utf8").catch(() => "");
   const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -259,15 +251,12 @@ async function buildDataset() {
     const school = relativeReview.split(path.sep)[0];
     if (!isSchoolActive(school, sources)) continue;
     const studentName = path.basename(reviewPath, "_审核结果.txt");
-    let bestPdfPath = "";
-    let bestScore = 0;
-    for (const candidate of pdfBySchool.get(school) || []) {
-      const score = scoreCandidate(studentName, candidate, school);
-      if (score > bestScore) {
-        bestPdfPath = candidate;
-        bestScore = score;
-      }
-    }
+    const scoredCandidates = (pdfBySchool.get(school) || [])
+      .map((candidate) => ({ candidate, score: scoreStudentPdfMatch(studentName, candidate, school) }))
+      .filter((entry) => entry.score > 0);
+    const bestScore = Math.max(0, ...scoredCandidates.map((entry) => entry.score));
+    const bestCandidates = scoredCandidates.filter((entry) => entry.score === bestScore);
+    const bestPdfPath = bestCandidates.length === 1 ? bestCandidates[0].candidate : "";
     const content = await fsp.readFile(reviewPath, "utf8").catch(() => "");
     if (!statuses.has(school)) statuses.set(school, await loadReviewStatus(path.join(reviewRoot, school)));
     const reviewed = Boolean(content.trim()) || isExplicitlyReviewed(statuses.get(school), studentName);
@@ -344,9 +333,7 @@ function runPowerShellPicker(kind) {
 }
 
 function suggestSchool(pdfDir) {
-  const generic = new Set(["资料", "团员资料", "入团申请资料", "入团志愿书", "PDF"]);
-  const folder = path.basename(pdfDir);
-  return generic.has(folder) ? path.basename(path.dirname(pdfDir)) : folder;
+  return path.basename(pdfDir);
 }
 
 async function start() {
@@ -387,7 +374,11 @@ async function start() {
         return;
       }
       if (req.method === "POST" && pathname === "/api/picker/folder") {
-        sendJson(res, 200, { path: await runPowerShellPicker("folder") });
+        const selectedPath = await runPowerShellPicker("folder");
+        sendJson(res, 200, {
+          path: selectedPath,
+          suggestedSchool: selectedPath ? suggestSchool(selectedPath) : ""
+        });
         return;
       }
       if (req.method === "POST" && pathname === "/api/picker/excel") {
