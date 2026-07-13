@@ -67,10 +67,14 @@ function addHighlight(highlights, entry, kind, target) {
   });
 }
 
-function declarationCount(matches, pageNumber) {
+function declarationCount(matches, pageNumber, { minY = -Infinity, maxY = Infinity } = {}) {
   return (matches?.[pageNumber] || []).filter((match) => {
     const target = normalizeText(match.target);
-    return target.includes("信仰") || target.includes("宗教") || target === "信仰声明";
+    if (!(target.includes("信仰") || target.includes("宗教") || target === "信仰声明")) return false;
+    const boxes = match.boxes || [];
+    if (!boxes.length) return minY === -Infinity && maxY === Infinity;
+    const centerY = boxes.reduce((sum, box) => sum + box.y + box.height / 2, 0) / boxes.length;
+    return centerY >= minY && centerY < maxY;
   }).length;
 }
 
@@ -222,9 +226,26 @@ export function analyzeOcrReview(ocrData, declarationMatches = {}) {
 
   const disciplineCourse = analyzeDisciplineCourse(pageObjects.study);
 
+  const applicationIntroducerSharedPage = pages.applicationSecond && pages.applicationSecond === pages.introducer;
+  const applicationSignatureLine = pageObjects.applicationSecond?.lines?.find((line) => normalizeText(line.text).includes("本人签名"));
+  const applicationSignatureBox = lineBox(applicationSignatureLine);
+  const applicationIntroducerBoundary = applicationIntroducerSharedPage && applicationSignatureBox
+    ? applicationSignatureBox.y + applicationSignatureBox.height
+    : null;
+  const applicationPageNumbers = [...new Set([pages.application, pages.applicationSecond].filter(Boolean))];
   const declarationCounts = {
-    application: declarationCount(declarationMatches, pages.application) + declarationCount(declarationMatches, pages.applicationSecond),
-    introducer: declarationCount(declarationMatches, pages.introducer),
+    application: applicationPageNumbers.reduce((sum, pageNumber) => sum + declarationCount(
+      declarationMatches,
+      pageNumber,
+      pageNumber === pages.applicationSecond && applicationIntroducerBoundary
+        ? { maxY: applicationIntroducerBoundary }
+        : {}
+    ), 0),
+    introducer: declarationCount(
+      declarationMatches,
+      pages.introducer,
+      applicationIntroducerBoundary ? { minY: applicationIntroducerBoundary } : {}
+    ),
     secretary: declarationCount(declarationMatches, pages.secretary)
   };
   const declarationDetail = `志愿 ${Math.min(declarationCounts.application, 1)}/1 · 介绍人 ${Math.min(declarationCounts.introducer, 2)}/2 · 支部 ${Math.min(declarationCounts.secretary, 1)}/1`;

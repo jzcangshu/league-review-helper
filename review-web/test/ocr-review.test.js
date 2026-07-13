@@ -48,6 +48,31 @@ test("review analysis locates pages by exact keywords instead of page numbers", 
   assert.equal(result.checks.declaration.status, "pass");
 });
 
+test("introducer declarations on a merged page do not satisfy the application declaration", async () => {
+  const { analyzeOcrReview } = await import("../public/ocr-review.js");
+  const ocrData = { pages: [
+    page(3, [line("入团志愿", 420, 80), line("无法辨认的志愿正文", 180, 500)]),
+    page(4, [
+      line("本人签名：陈馨", 700, 650),
+      line("姓名：介绍人甲", 200, 900),
+      line("介绍人签名：甲", 700, 1250),
+      line("姓名：介绍人乙", 200, 1400),
+      line("介绍人签名：乙", 700, 1700)
+    ]),
+    page(5, [line("支部书记签名：丙", 700, 1100)])
+  ] };
+  const declarationMatches = {
+    4: [
+      { target: "信仰声明", boxes: [{ x: 240, y: 980, width: 600, height: 50 }] },
+      { target: "信仰声明", boxes: [{ x: 240, y: 1480, width: 600, height: 50 }] }
+    ],
+    5: [{ target: "信仰声明", boxes: [{ x: 240, y: 700, width: 600, height: 50 }] }]
+  };
+  const result = analyzeOcrReview(ocrData, declarationMatches);
+  assert.equal(result.checks.declaration.status, "fail");
+  assert.equal(result.checks.declaration.detail, "声明缺失 · 志愿 0/1 · 介绍人 2/2 · 支部 1/1");
+});
+
 test("review analysis keeps activist dates as a manual text reminder", async () => {
   const { analyzeOcrReview } = await import("../public/ocr-review.js");
   const ocrData = { pages: [
