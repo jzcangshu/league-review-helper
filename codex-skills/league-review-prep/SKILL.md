@@ -5,9 +5,7 @@ description: Prepare new schools for youth league application review and finish 
 
 # League Review Prep
 
-Use this skill before manual PDF review for any newly added school folder.
-
-Also use this skill after the user says a school's review is complete and asks Codex to write all TXT audit results into that school's Excel roster.
+The WebUI is the primary beginner workflow and can independently import a PDF folder and Excel roster, compare names, create review TXT files, review PDFs, and write results back to Excel. Use this optional skill when the user explicitly asks Codex to automate the same preparation or completed-school export from the command line.
 
 ## Workflow
 
@@ -20,6 +18,8 @@ Also use this skill after the user says a school's review is complete and asks C
    - names only in PDF/materials
    - suspicious name-shape pairs
    - whether the folder was registered for `review-web`
+
+Keep the selected PDF folder's basename as the school name unless the user explicitly provides another name. Do not infer a school name from parent folders.
 
 ## Recommended Command
 
@@ -39,27 +39,40 @@ Use the bundled Python from `load_workspace_dependencies` when available. The sc
 
 ## Completed Review Export
 
-When the user says a school is fully reviewed, write the school's `审核结果/<学校名>/*_审核结果.txt` files back into the Excel column `入团志愿书问题备注`:
+When the user says a school is fully reviewed, write the school's `审核结果/<学校名>/*_审核结果.txt` files back into the existing Excel review-result column.
+
+If Codex is running the write-back, inspect the roster workbook headers first and decide the exact target column name. Then pass that header with `--result-column`. Do not rely on blind/default column creation. If no suitable existing column is present, stop and report it to the user.
 
 ```powershell
-python codex-skills/league-review-prep/scripts/prepare_school_review.py --school-dir "学校文件夹" --write-excel
+python codex-skills/league-review-prep/scripts/prepare_school_review.py --school-dir "学校文件夹" --write-excel --result-column "入团志愿书问题备注"
 ```
+
+Target-column choice order:
+
+1. Prefer the exact header `问题备注`.
+2. Otherwise use the exact header `问题`.
+3. Otherwise use the only header containing `问题`.
+
+The script applies the same priority when `--result-column` is omitted for manual runs, but it never creates a missing column. Multiple candidates at the same priority are treated as ambiguous; rerun with `--result-column`.
 
 The write-back mode automatically uses high-confidence fuzzy matches when the Excel name and TXT-result name have the same length, the same first character, exactly one differing character, and only one candidate. This is intended for obvious homophone/near-shape typos such as `李明/李铭` or `周晴/周睛`. Every fuzzy or alias write must still be reported in the Markdown output so the user can review it.
 
 If there are confirmed name-shape differences that are ambiguous or not captured by this rule, pass them explicitly:
 
 ```powershell
-python codex-skills/league-review-prep/scripts/prepare_school_review.py --school-dir "学校文件夹" --write-excel --alias "Excel姓名=审核结果姓名"
+python codex-skills/league-review-prep/scripts/prepare_school_review.py --school-dir "学校文件夹" --write-excel --result-column "入团志愿书问题备注" --alias "Excel姓名=审核结果姓名"
 ```
 
-Rows without a matching audit-result TXT are written as red `无资料`. Empty existing audit-result TXT files are written as blank cells.
+Rows without a matching audit-result TXT are written as red `无资料`. Empty TXT files are not enough to prove that a review is complete: only names recorded in `审核结果/<学校名>/.review-status.json` are treated as reviewed with no issues and written as blank cells. Empty TXT files without that explicit status are written as orange `未审核` so pre-created placeholders cannot be mistaken for completed reviews.
+
+The review web app maintains `.review-status.json` automatically. Non-empty TXT content remains backward-compatible and is always treated as reviewed. Do not manually mark every pre-created empty TXT as reviewed.
 
 ## Output Convention
 
 The script creates:
 
 - `审核结果/<学校名>/<人名>_审核结果.txt`
+- `审核结果/<学校名>/.review-status.json` for explicit reviewed/no-issue state
 - optional `review-web/sources.json` entry when `--update-web-sources` is used
 
 Review TXT files are created only under `审核结果/<学校名>`. Existing review TXT files are never overwritten.

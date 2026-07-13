@@ -16,6 +16,9 @@ from openpyxl import load_workbook
 from openpyxl.styles import Font
 
 
+STATUS_FILE = ".review-status.json"
+
+
 def clean(value: object) -> str:
     return re.sub(r"\s+", "", str(value or "")).strip()
 
@@ -210,13 +213,47 @@ def load_review_results(review_dir: Path) -> dict[str, str]:
     return results
 
 
-def find_or_create_result_column(sheet, header_row: int) -> int:
-    for column in range(1, sheet.max_column + 1):
-        if clean(sheet.cell(header_row, column).value) == "入团志愿书问题备注":
-            return column
-    result_col = sheet.max_column + 1
-    sheet.cell(header_row, result_col).value = "入团志愿书问题备注"
-    return result_col
+def load_reviewed_names(review_dir: Path) -> set[str]:
+    status_path = review_dir / STATUS_FILE
+    if not status_path.exists():
+        return set()
+    try:
+        payload = json.loads(status_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return set()
+    reviewed = payload.get("reviewed", {})
+    return {clean(name) for name in reviewed if clean(name)} if isinstance(reviewed, dict) else set()
+
+
+def find_result_column(sheet, header_row: int, requested_column: str | None = None) -> tuple[int, str, str]:
+    headers = [
+        (column, clean(sheet.cell(header_row, column).value))
+        for column in range(1, sheet.max_column + 1)
+        if clean(sheet.cell(header_row, column).value)
+    ]
+
+    if requested_column:
+        requested = clean(requested_column)
+        for column, header in headers:
+            if header == requested:
+                return column, header, "specified"
+        raise SystemExit(f"未找到指定回写列：{requested_column}。请确认表头行存在该列；脚本不会自动创建回写列。")
+
+    match_rules = [
+        ("问题备注", lambda header: header == "问题备注"),
+        ("问题", lambda header: header == "问题"),
+        ("包含问题", lambda header: "问题" in header),
+    ]
+    for label, predicate in match_rules:
+        matches = [(column, header) for column, header in headers if predicate(header)]
+        if len(matches) == 1:
+            column, header = matches[0]
+            return column, header, f"auto:{label}"
+        if len(matches) > 1:
+            names = "、".join(header for _, header in matches)
+            raise SystemExit(f"回写列匹配到多个“{label}”候选：{names}。请用 --result-column 指定准确列名。")
+
+    raise SystemExit("未找到回写列。脚本会依次匹配精确“问题备注”、精确“问题”和唯一的含“问题”列，不会自动创建新列。")
 
 
 def red_font_from(cell) -> Font:
@@ -231,19 +268,29 @@ def normal_font_from(cell) -> Font:
     return font
 
 
+def pending_font_from(cell) -> Font:
+    font = copy(cell.font)
+    font.color = "C65911"
+    return font
+
+
 def write_reviews_to_excel(
     roster: ExcelRoster,
     review_dir: Path,
     aliases: dict[str, str],
     missing_text: str,
+    pending_text: str,
+    result_column: str | None,
 ) -> dict[str, object]:
     results = load_review_results(review_dir)
+    reviewed_names = load_reviewed_names(review_dir)
     workbook = load_workbook(roster.path)
     sheet = workbook[roster.sheet]
-    result_col = find_or_create_result_column(sheet, roster.header_row)
+    result_col, result_header, result_match = find_result_column(sheet, roster.header_row, result_column)
 
     written = 0
     blank = 0
+    pending: list[str] = []
     missing: list[str] = []
     ambiguous: list[tuple[str, str]] = []
     alias_used: list[tuple[str, str]] = []
@@ -259,13 +306,19 @@ def write_reviews_to_excel(
 
         if source_name and source_name in results:
             content = results[source_name]
-            cell.value = content or None
-            cell.font = normal_font_from(cell)
             used_results.add(source_name)
             if content:
+                cell.value = content
+                cell.font = normal_font_from(cell)
                 written += 1
-            else:
+            elif source_name in reviewed_names:
+                cell.value = None
+                cell.font = normal_font_from(cell)
                 blank += 1
+            else:
+                cell.value = pending_text
+                cell.font = pending_font_from(cell)
+                pending.append(excel_name)
             if match_kind == "alias":
                 alias_used.append((excel_name, source_name))
             elif match_kind == "fuzzy":
@@ -282,8 +335,11 @@ def write_reviews_to_excel(
     unused_results = sorted(set(results) - used_results, key=locale_key)
     return {
         "result_col": result_col,
+        "result_header": result_header,
+        "result_match": result_match,
         "written": written,
         "blank": blank,
+        "pending": pending,
         "missing": missing,
         "ambiguous": ambiguous,
         "alias_used": alias_used,
@@ -304,6 +360,8 @@ def main() -> int:
     parser.add_argument("--write-excel", action="store_true", help="write completed review TXT results into the roster Excel")
     parser.add_argument("--alias", action="append", default=[], help="confirmed name mapping, format: Excel姓名=审核结果姓名")
     parser.add_argument("--missing-text", default="无资料", help="text written in red when no matching review result exists")
+    parser.add_argument("--pending-text", default="未审核", help="text written when an empty TXT has not been explicitly reviewed")
+    parser.add_argument("--result-column", help="existing Excel header to receive review results; must match the cleaned header exactly")
     args = parser.parse_args()
 
     workspace = Path(args.workspace).resolve()
@@ -317,13 +375,17 @@ def main() -> int:
 
     if args.write_excel:
         aliases = parse_aliases(args.alias)
-        write_report = write_reviews_to_excel(roster, review_dir, aliases, args.missing_text)
+        write_report = write_reviews_to_excel(
+            roster, review_dir, aliases, args.missing_text, args.pending_text, args.result_column
+        )
         print(f"# {school} 审核结果回写报告")
         print()
         print(f"- Excel: {roster.path.relative_to(workspace)}")
         print(f"- 工作表: {roster.sheet}，姓名表头行: {roster.header_row}")
+        print(f"- 回写列: {write_report['result_header']}（第 {write_report['result_col']} 列，{write_report['result_match']}）")
         print(f"- 审核结果目录: {review_dir.relative_to(workspace)}")
         print(f"- 写入非空审核结果: {write_report['written']}；写入空结果: {write_report['blank']}")
+        print(f"- 未审核空 TXT 标记: {len(write_report['pending'])}")
         print(f"- 无资料红字标记: {len(write_report['missing'])}")
         alias_used = write_report["alias_used"]
         fuzzy_used = write_report["fuzzy_used"]
@@ -337,6 +399,8 @@ def main() -> int:
         if ambiguous:
             print("- 模糊匹配多候选，已按无资料标记: " + "、".join(f"{left}←{right}" for left, right in ambiguous))
         missing = write_report["missing"]
+        pending = write_report["pending"]
+        print("- 未审核名单: " + ("、".join(pending) if pending else "无"))
         print("- 无资料名单: " + ("、".join(missing) if missing else "无"))
         unused_results = write_report["unused_results"]
         print("- 未写入的审核结果TXT: " + ("、".join(unused_results) if unused_results else "无"))

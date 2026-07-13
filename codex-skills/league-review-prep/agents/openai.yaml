@@ -1,4 +1,4 @@
 interface:
   display_name: "团员审核准备"
-  short_description: "新增学校资料审核前准备与名单自动核对流程"
-  default_prompt: "Use $league-review-prep to prepare a new school youth league review folder and compare Excel names with PDF files."
+  short_description: "自动准备学校资料、核对名单并回填审核结果"
+  default_prompt: "Use $league-review-prep to prepare a school review from its Excel roster and PDF folder, or export completed TXT review results back to the existing Excel result column."
