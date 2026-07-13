@@ -42,6 +42,48 @@ test("long declaration can match by a recognized clause", async () => {
   assert.equal(matches.length, 1);
 });
 
+test("a phrase inside one OCR line only highlights its proportional character range", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const page = {
+    page: 9,
+    width: 1400,
+    height: 2000,
+    lines: [{
+      text: "杜婉宁信仰马克思主义无其他宗教信仰",
+      words: [{ text: "杜婉宁信仰马克思主义无其他宗教信仰", x: 100, y: 600, width: 900, height: 60 }]
+    }]
+  };
+  const matches = findOcrTargetMatches(page, [{
+    label: "信仰说明",
+    phrases: ["信仰马克思主义无其他宗教信仰"]
+  }]);
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].boxes.length, 1);
+  assert.ok(matches[0].boxes[0].x > 100);
+  assert.ok(matches[0].boxes[0].width < 900);
+});
+
+test("a phrase spanning OCR lines returns precise pieces instead of whole lines", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const page = {
+    page: 9,
+    width: 1400,
+    height: 2000,
+    lines: [
+      { text: "姓名只信仰马克思主义", words: [{ text: "姓名只信仰马克思主义", x: 100, y: 600, width: 800, height: 60 }] },
+      { text: "无其他宗教信仰后续文字", words: [{ text: "无其他宗教信仰后续文字", x: 100, y: 680, width: 800, height: 60 }] }
+    ]
+  };
+  const matches = findOcrTargetMatches(page, [{
+    label: "信仰说明",
+    phrases: ["只信仰马克思主义无其他宗教信仰"]
+  }]);
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].boxes.length, 2);
+  assert.ok(matches[0].boxes[0].x > 100);
+  assert.ok(matches[0].boxes[1].width < 800);
+});
+
 test("OCR boxes follow PDF rotation and viewport size", async () => {
   const { transformOcrBox } = await import("../public/ocr-matcher.js");
   const box = { x: 100, y: 200, width: 300, height: 100 };
@@ -70,6 +112,31 @@ test("recall mode groups nearby short fragments", async () => {
     fragments: ["只信仰", "马克思", "无其他", "宗教"]
   }]);
   assert.ok(matches.some((match) => match.approximate && match.fragmentCount >= 2));
+});
+
+test("an exact clause is not merged with nearby approximate fragments", async () => {
+  const { findOcrTargetMatches } = await import("../public/ocr-matcher.js");
+  const page = {
+    page: 9,
+    width: 1488,
+    height: 2105,
+    lines: [
+      { text: "婉宁积极参加志愿实践活动努力完善自己", words: [{ text: "婉宁积极参加志愿实践活动努力完善自己", x: 352, y: 513, width: 879, height: 51 }] },
+      { text: "认为其已经具备了团员条件", words: [{ text: "认为其已经具备了团员条件", x: 365, y: 570, width: 366, height: 51 }] },
+      { text: "杜女婉宁信仰与克思主义无其它宗教信仰未参加任何宗教活动", words: [{ text: "杜女婉宁信仰与克思主义无其它宗教信仰未参加任何宗教活动", x: 410, y: 627, width: 843, height: 51 }] }
+    ]
+  };
+  const matches = findOcrTargetMatches(page, [{
+    label: "宗教信仰长句",
+    phrases: ["未参加任何宗教活动"],
+    fragments: ["只信仰", "马克思主义", "无其他", "其他宗教", "宗教信仰", "未参加", "任何宗教", "宗教活动"],
+    minimumFragments: 2
+  }]);
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].boxes.length, 1);
+  assert.ok(matches[0].boxes[0].y >= 620);
+  assert.ok(matches[0].boxes[0].x >= 500);
+  assert.ok(matches[0].boxes[0].width < 780);
 });
 
 test("specific terms require their distinctive anchor", async () => {

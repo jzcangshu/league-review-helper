@@ -153,22 +153,46 @@ function flattenPage(page) {
       if (!normalized) continue;
       const wordIndex = words.length;
       words.push({ ...word, lineIndex });
-      for (const char of normalized) chars.push({ char, wordIndex });
+      for (let charOffset = 0; charOffset < normalized.length; charOffset += 1) {
+        chars.push({
+          char: normalized[charOffset],
+          wordIndex,
+          charOffset,
+          charCount: normalized.length
+        });
+      }
     }
   }
   return { words, chars };
 }
 
-function boxesForRange(words, startWord, endWord) {
+function boxesForRange(words, chars, startChar, endChar) {
+  const byWord = new Map();
+  for (let index = startChar; index <= endChar; index += 1) {
+    const entry = chars[index];
+    const current = byWord.get(entry.wordIndex);
+    if (!current) {
+      byWord.set(entry.wordIndex, {
+        startOffset: entry.charOffset,
+        endOffset: entry.charOffset,
+        charCount: entry.charCount
+      });
+    } else {
+      current.startOffset = Math.min(current.startOffset, entry.charOffset);
+      current.endOffset = Math.max(current.endOffset, entry.charOffset);
+    }
+  }
+
   const byLine = new Map();
-  for (let index = startWord; index <= endWord; index += 1) {
-    const word = words[index];
+  for (const [wordIndex, range] of byWord) {
+    const word = words[wordIndex];
+    const x = word.x + word.width * (range.startOffset / range.charCount);
+    const right = word.x + word.width * ((range.endOffset + 1) / range.charCount);
     const current = byLine.get(word.lineIndex);
-    const right = word.x + word.width;
     const bottom = word.y + word.height;
-    if (!current) byLine.set(word.lineIndex, { x: word.x, y: word.y, right, bottom });
+    if (!current) byLine.set(word.lineIndex, { x, y: word.y, right, bottom });
     else {
-      current.x = Math.min(current.x, word.x);
+      current.x = Math.min(current.x, x);
       current.y = Math.min(current.y, word.y);
       current.right = Math.max(current.right, right);
       current.bottom = Math.max(current.bottom, bottom);
@@ -210,9 +234,11 @@ function bestPhraseMatches(page, target, phrase, recall = false) {
         target,
         phrase,
         score: result.score,
+        startChar: start,
+        endChar: end - 1,
         startWord,
         endWord,
-        boxes: boxesForRange(words, startWord, endWord),
+        boxes: boxesForRange(words, chars, start, end - 1),
         approximate: recall
       });
     }
@@ -221,7 +247,7 @@ function bestPhraseMatches(page, target, phrase, recall = false) {
   const selected = [];
   for (const candidate of candidates) {
     const overlaps = selected.some((match) =>
-      candidate.startWord <= match.endWord && candidate.endWord >= match.startWord);
+      candidate.startChar <= match.endChar && candidate.endChar >= match.startChar);
     if (!overlaps) selected.push(candidate);
     if (selected.length >= 3) break;
   }
@@ -234,23 +260,33 @@ function centerY(match) {
   return (top + bottom) / 2;
 }
 
-function lineBoxes(matches, page, paddingRatio = 0.008) {
+function lineBoxes(matches, page, paddingRatio = 0.004) {
   const paddingX = page.width * paddingRatio;
   const paddingY = page.height * paddingRatio;
   const selected = [];
   for (const box of matches.flatMap((match) => match.boxes).sort((left, right) => left.y - right.y)) {
-    const duplicate = selected.some((current) =>
-      Math.abs(current.y - box.y) <= Math.max(current.height, box.height) * 0.5 &&
-      Math.abs(current.x - box.x) <= Math.max(current.width, box.width) * 0.5);
-    if (duplicate) continue;
     const left = Math.max(0, box.x - paddingX);
     const top = Math.max(0, box.y - paddingY);
-    selected.push({
+    const padded = {
       x: left,
       y: top,
       width: Math.min(page.width, box.x + box.width + paddingX) - left,
       height: Math.min(page.height, box.y + box.height + paddingY) - top
+    };
+    const sameLine = selected.find((current) => {
+      const overlap = Math.min(current.y + current.height, padded.y + padded.height) - Math.max(current.y, padded.y);
+      return overlap >= Math.min(current.height, padded.height) * 0.5;
     });
+    if (!sameLine) {
+      selected.push(padded);
+      continue;
+    }
+    const right = Math.max(sameLine.x + sameLine.width, padded.x + padded.width);
+    const bottom = Math.max(sameLine.y + sameLine.height, padded.y + padded.height);
+    sameLine.x = Math.min(sameLine.x, padded.x);
+    sameLine.y = Math.min(sameLine.y, padded.y);
+    sameLine.width = right - sameLine.x;
+    sameLine.height = bottom - sameLine.y;
   }
   return selected;
 }
@@ -295,22 +331,32 @@ function matchesOverlap(left, right) {
   }));
 }
 
-function matchesNearby(left, right, page) {
-  const leftCenters = left.boxes.map((box) => box.y + box.height / 2);
-  const rightCenters = right.boxes.map((box) => box.y + box.height / 2);
-  return leftCenters.some((leftCenter) => rightCenters.some((rightCenter) =>
-    Math.abs(leftCenter - rightCenter) <= page.height * 0.05));
+function matchesSameLine(left, right) {
+  return left.boxes.some((leftBox) => right.boxes.some((rightBox) => {
+    const overlap = Math.min(leftBox.y + leftBox.height, rightBox.y + rightBox.height) - Math.max(leftBox.y, rightBox.y);
+    return overlap >= Math.min(leftBox.height, rightBox.height) * 0.5;
+  }));
 }
 
 export function findOcrTargetMatches(page, targets = OCR_TARGETS) {
   const matches = [];
   for (const target of targets) {
-    const targetMatches = target.phrases.flatMap((phrase) => bestPhraseMatches(page, target.label, phrase));
-    targetMatches.push(...findFragmentClusters(page, target));
+    const partialPhrases = target.phrases.filter((phrase) =>
+      normalizeOcrText(phrase) !== normalizeOcrText(target.label));
+    const partialMatches = partialPhrases.flatMap((phrase) => bestPhraseMatches(page, target.label, phrase));
+    const fullMatches = partialMatches.length
+      ? []
+      : target.phrases.flatMap((phrase) => bestPhraseMatches(page, target.label, phrase));
+    const directMatches = partialMatches.length ? partialMatches : fullMatches;
+    directMatches.sort((left, right) => right.score - left.score);
+    const anchor = directMatches[0];
+    const targetMatches = anchor
+      ? directMatches.filter((candidate) => matchesOverlap(candidate, anchor) || matchesSameLine(candidate, anchor))
+      : findFragmentClusters(page, target);
     targetMatches.sort((left, right) => right.score - left.score);
     const selected = [];
     for (const candidate of targetMatches) {
-      const existing = selected.find((match) => matchesOverlap(candidate, match) || matchesNearby(candidate, match, page));
+      const existing = selected.find((match) => matchesOverlap(candidate, match) || matchesSameLine(candidate, match));
       if (existing) {
         existing.boxes = lineBoxes([existing, candidate], page);
         existing.score = Math.max(existing.score, candidate.score);
