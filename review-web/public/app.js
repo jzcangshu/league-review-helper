@@ -74,6 +74,7 @@ const elementIds = [
   "historyPreviewContainer", "recognitionSummary", "reportOutput", "analysisWizardMessage", "analysisBackButton",
   "analysisNextButton", "confirmImportButton", "finishAnalysisButton",
   "exportSchoolLabel", "exportStatus", "exportResultColumnSelect", "writeBackExcelButton",
+  "shortcutToolTab", "exportToolTab", "shortcutToolPanel", "exportToolPanel",
   "prevPageButton", "nextPageButton", "pageIndicator", "zoomOutButton", "zoomIndicator", "zoomInButton",
   "rotateButton", "downloadButton", "ocrToggleButton", "ocrStatus", "pdfPageSurface", "ocrOverlay",
   "pdfCanvas", "pdfLoading", "pdfEmpty", "pdfStage", "pdfThumbnails", "ocrReviewRail",
@@ -717,6 +718,16 @@ function renderShortcuts() {
   });
 }
 
+function showUtilityPanel(panel) {
+  const showExport = panel === "export";
+  elements.shortcutToolTab.classList.toggle("active", !showExport);
+  elements.exportToolTab.classList.toggle("active", showExport);
+  elements.shortcutToolTab.setAttribute("aria-selected", String(!showExport));
+  elements.exportToolTab.setAttribute("aria-selected", String(showExport));
+  elements.shortcutToolPanel.hidden = showExport;
+  elements.exportToolPanel.hidden = !showExport;
+}
+
 function insertAtCursor(text) {
   if (!state.currentReviewId || !text.trim()) return;
   const textarea = elements.reviewText;
@@ -1346,6 +1357,8 @@ function attachEvents() {
     state.importResult = null;
     showImportStep(1);
   });
+  elements.shortcutToolTab.addEventListener("click", () => showUtilityPanel("shortcuts"));
+  elements.exportToolTab.addEventListener("click", () => showUtilityPanel("export"));
   elements.writeBackExcelButton.addEventListener("click", writeBackCurrentSchool);
   elements.ocrToggleButton.addEventListener("click", () => {
     state.ocrEnabled = !state.ocrEnabled;
@@ -1393,10 +1406,16 @@ function attachEvents() {
   });
 
   window.addEventListener("keydown", (event) => {
-    if (event.code === "PageDown" || event.code === "PageUp") {
+    const pageOffset = {
+      PageDown: 1,
+      ArrowDown: 1,
+      PageUp: -1,
+      ArrowUp: -1
+    }[event.code];
+    if (pageOffset) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      movePdfPage(event.code === "PageDown" ? 1 : -1);
+      movePdfPage(pageOffset);
       return;
     }
     const shortcut = { Numpad1: 0, Numpad2: 1, Numpad3: 2, Numpad4: 3, Numpad5: 4, Numpad6: 5 }[event.code];

@@ -114,26 +114,25 @@
           <ol id="noteList" class="note-list"></ol>
         </section>
 
-        <section class="panel export-panel">
-          <div class="panel-head">
-            <span>5. 将全校审核结果填入 Excel 名单</span>
+        <section class="utility-dock" aria-label="审核辅助工具">
+          <div class="utility-tabs" role="tablist" aria-label="审核辅助功能">
+            <button id="shortcutToolTab" class="utility-tab active" type="button" role="tab" aria-selected="true" aria-controls="shortcutToolPanel">快捷短语</button>
+            <button id="exportToolTab" class="utility-tab" type="button" role="tab" aria-selected="false" aria-controls="exportToolPanel">5. 回填 Excel</button>
           </div>
-          <div class="export-row">
-            <div>
-              <strong id="exportSchoolLabel">当前学校</strong>
-              <div id="exportStatus" class="hint">写入前会自动备份原 Excel，并按姓名去重补充名单。</div>
+          <div id="shortcutToolPanel" class="utility-panel" role="tabpanel" aria-labelledby="shortcutToolTab">
+            <div class="utility-panel-head hint">小键盘 `1-6` 直接插入</div>
+            <div id="shortcutList" class="shortcut-list"></div>
+          </div>
+          <div id="exportToolPanel" class="utility-panel" role="tabpanel" aria-labelledby="exportToolTab" hidden>
+            <div class="export-row">
+              <div>
+                <strong id="exportSchoolLabel">当前学校</strong>
+                <div id="exportStatus" class="hint">写入前会自动备份原 Excel，并按姓名去重补充名单。</div>
+              </div>
+              <select id="exportResultColumnSelect" aria-label="回填结果列" hidden></select>
+              <button id="writeBackExcelButton" class="primary" type="button">回填当前学校</button>
             </div>
-            <select id="exportResultColumnSelect" aria-label="回填结果列" hidden></select>
-            <button id="writeBackExcelButton" class="primary" type="button">回填当前学校</button>
           </div>
-        </section>
-
-        <section class="shortcut-dock">
-          <div class="panel-head">
-            <span>快捷短语</span>
-            <span class="hint">小键盘 `1-6` 直接插入</span>
-          </div>
-          <div id="shortcutList" class="shortcut-list"></div>
         </section>
       </aside>
 

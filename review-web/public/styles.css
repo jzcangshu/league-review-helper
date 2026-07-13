@@ -79,7 +79,7 @@ input {
 
 .top-bar,
 .panel,
-.shortcut-dock,
+.utility-dock,
 .pdf-toolbar {
   padding: 14px 16px;
 }
@@ -421,15 +421,12 @@ button.primary:hover {
   overflow: auto;
 }
 
-.export-panel {
-  flex: 0 0 auto;
-}
-
 .export-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(170px, 240px) auto;
   gap: 8px;
   align-items: center;
+  min-height: 108px;
 }
 
 .export-row select {
@@ -458,9 +455,52 @@ button.primary:hover {
   white-space: pre-wrap;
 }
 
-.shortcut-dock {
+.utility-dock {
+  flex: 0 0 190px;
+  min-height: 190px;
+  padding-top: 10px;
+  padding-bottom: 12px;
+  overflow: hidden;
   border-top: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(139, 30, 63, 0.04), rgba(255, 255, 255, 0.7));
+}
+
+.utility-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  margin-bottom: 7px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.utility-tab {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.utility-tab.active {
+  color: #fff;
+  background: var(--accent);
+}
+
+.utility-panel {
+  min-height: 120px;
+}
+
+.utility-panel-head {
+  height: 18px;
+  margin-bottom: 5px;
+  text-align: right;
 }
 
 .shortcut-list {
@@ -484,11 +524,14 @@ button.primary:hover {
 
 .shortcut-input {
   width: 100%;
+  height: 30px;
+  min-height: 30px;
   padding: 0 10px;
 }
 
 .shortcut-use {
   min-width: 46px;
+  min-height: 30px;
   padding: 0 7px;
 }
 
