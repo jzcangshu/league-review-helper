@@ -1,10 +1,12 @@
 # 入团申请材料审核助手
 
-一个面向学校批量审核工作的本地 WebUI（网页界面）工具。选择 PDF 文件夹和 Excel 名单后，即可在浏览器中完成资料导入、姓名核对、PDF 审核、OCR（光学字符识别）辅助检查和结果回填。
+一个面向学校批量审核工作的本地 WebUI（网页界面）工具；
+具备自动检查名单中/申请书的缺失学生、手写OCR辅助检查、自动标注必备文本（马克思注意信仰声明）、小键盘快捷填入审核意见、审核结果批量回填Excel等功能。
 
+亲测对比原始人版审核方法，效率至少翻五倍；
 学生材料默认只在本机处理，不需要上传到第三方服务。
 
-<img width="2560" height="1440" alt="运行截图（脱敏）" src="https://github.com/user-attachments/assets/cc6eeba5-4ab8-491f-9573-a6ba7d40b27f" />
+<img width="2560" height="1440" alt="运行截图" src="https://github.com/user-attachments/assets/c8486c13-ff0d-49e6-a79e-6198aea5c521" />
 
 ## 主要功能
 
