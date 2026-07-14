@@ -13,6 +13,8 @@ const { writeSchoolResultsToExcel } = require("./lib/export-service");
 const { recognizePdf } = require("./lib/ocr-service");
 const { isExplicitlyReviewed, loadReviewStatus, setReviewed } = require("./lib/review-status");
 const { generatePdfThumbnails } = require("./lib/thumbnail-service");
+const { checkForUpdates } = require("./lib/update-service");
+const packageMetadata = require("./package.json");
 const {
   isSchoolActive,
   migrateSource,
@@ -364,6 +366,33 @@ async function start() {
   await fsp.mkdir(reviewRoot, { recursive: true });
   let dataset = await buildDataset();
   const importAnalyses = new Map();
+  let updateInfo = { status: "checking", currentVersion: packageMetadata.version };
+  let updatePromise = null;
+
+  function refreshUpdateInfo() {
+    if (updatePromise) return updatePromise;
+    updateInfo = { status: "checking", currentVersion: packageMetadata.version };
+    updatePromise = checkForUpdates({ currentVersion: packageMetadata.version })
+      .then((result) => {
+        updateInfo = { status: "ready", ...result };
+        return updateInfo;
+      })
+      .catch((error) => {
+        updateInfo = {
+          status: "error",
+          currentVersion: packageMetadata.version,
+          error: error instanceof Error ? error.message : String(error),
+          checkedAt: new Date().toISOString()
+        };
+        return updateInfo;
+      })
+      .finally(() => {
+        updatePromise = null;
+      });
+    return updatePromise;
+  }
+
+  void refreshUpdateInfo();
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -371,7 +400,12 @@ async function start() {
       const pathname = requestUrl.pathname;
 
       if (req.method === "GET" && pathname === "/api/health") {
-        sendJson(res, 200, { ok: true, generatedAt: dataset.generatedAt, workspaceRoot });
+        sendJson(res, 200, { ok: true, generatedAt: dataset.generatedAt, workspaceRoot, version: packageMetadata.version });
+        return;
+      }
+      if (req.method === "GET" && pathname === "/api/update") {
+        if (requestUrl.searchParams.get("refresh") === "1") await refreshUpdateInfo();
+        sendJson(res, 200, updateInfo);
         return;
       }
       if (req.method === "GET" && pathname === "/api/bootstrap") {

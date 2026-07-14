@@ -12,6 +12,7 @@ const SHORTCUTS_KEY = "review-shortcuts-v3";
 const LEGACY_SHORTCUTS_KEY = "review-shortcuts-v2";
 const SCHOOL_FILTER_KEY = "review-school-filter-v2";
 const LAST_ITEM_KEY = "review-last-item-v2";
+const UPDATE_READ_KEY = "review-update-read-v1";
 const defaultShortcuts = [
   "基本信息未填写完整",
   "时间顺序不一致",
@@ -69,7 +70,9 @@ const state = {
   ocrLoadToken: 0,
   ocrProgress: 0,
   ocrProgressTimer: null,
-  ocrPrefetchToken: 0
+  ocrPrefetchToken: 0,
+  updateInfo: null,
+  updatePollTimer: null
 };
 
 const elementIds = [
@@ -93,7 +96,9 @@ const elementIds = [
   "closeIssuesDialogButton", "schoolsDialog", "closeSchoolsDialogButton", "sourceList",
   "notesDialog", "closeNotesDialogButton", "notesEditor", "notesMessage", "saveNotesButton",
   "aboutProjectButton", "feedbackProjectButton", "aboutProjectDialog", "feedbackProjectDialog",
-  "closeAboutProjectButton", "closeFeedbackProjectButton"
+  "closeAboutProjectButton", "closeFeedbackProjectButton", "checkUpdateButton", "updateUnreadDot",
+  "updateDialog", "updateDialogTitle", "updateVersionSummary", "updateChangelog",
+  "downloadLatestButton", "closeUpdateDialogButton"
 ];
 const elements = Object.fromEntries(elementIds.map((id) => [id, document.getElementById(id)]));
 
@@ -1213,6 +1218,87 @@ async function saveNotes() {
   }
 }
 
+function updateWasRead(version) {
+  try {
+    return localStorage.getItem(UPDATE_READ_KEY) === version;
+  } catch {
+    return false;
+  }
+}
+
+function markUpdateRead(version) {
+  try {
+    localStorage.setItem(UPDATE_READ_KEY, version);
+  } catch {}
+}
+
+function renderUpdateIndicator() {
+  const info = state.updateInfo;
+  const unread = Boolean(info?.status === "ready" && info.updateAvailable && !updateWasRead(info.latestVersion));
+  elements.updateUnreadDot.hidden = !unread;
+  elements.checkUpdateButton.title = info?.status === "ready"
+    ? `当前版本 ${info.currentVersion}，最新版本 ${info.latestVersion}`
+    : "检查软件更新";
+}
+
+function renderUpdateDialog() {
+  const info = state.updateInfo;
+  elements.updateChangelog.hidden = true;
+  elements.downloadLatestButton.hidden = true;
+  if (!info || info.status === "checking") {
+    elements.updateDialogTitle.textContent = "检查更新";
+    elements.updateVersionSummary.textContent = "正在检查更新...";
+    return;
+  }
+  if (info.status === "error") {
+    elements.updateDialogTitle.textContent = "暂时无法检查更新";
+    elements.updateVersionSummary.textContent = info.error || "请稍后重试。";
+    return;
+  }
+  if (!info.updateAvailable) {
+    elements.updateDialogTitle.textContent = "已是最新版";
+    elements.updateVersionSummary.textContent = `当前版本 v${info.currentVersion} 已是最新版。`;
+    return;
+  }
+  elements.updateDialogTitle.textContent = `发现新版本 v${info.latestVersion}`;
+  elements.updateVersionSummary.textContent = `当前版本 v${info.currentVersion}，最新版本 v${info.latestVersion}。`;
+  elements.updateChangelog.textContent = info.changelog || "本次更新未提供更新日志。";
+  elements.updateChangelog.hidden = false;
+  elements.downloadLatestButton.href = info.releasesUrl || elements.downloadLatestButton.href;
+  elements.downloadLatestButton.hidden = false;
+}
+
+async function loadUpdateInfo({ refresh = false, attempt = 0 } = {}) {
+  try {
+    const payload = await api(`/api/update${refresh ? "?refresh=1" : ""}`);
+    state.updateInfo = payload;
+    renderUpdateIndicator();
+    if (elements.updateDialog.open) renderUpdateDialog();
+    if (payload.status === "checking" && attempt < 15) {
+      clearTimeout(state.updatePollTimer);
+      state.updatePollTimer = setTimeout(() => loadUpdateInfo({ attempt: attempt + 1 }), 700);
+    }
+  } catch (error) {
+    state.updateInfo = { status: "error", error: error.message };
+    renderUpdateIndicator();
+    if (elements.updateDialog.open) renderUpdateDialog();
+  }
+}
+
+async function openUpdateDialog() {
+  if (!elements.updateDialog.open) elements.updateDialog.showModal();
+  if (state.updateInfo?.updateAvailable) {
+    markUpdateRead(state.updateInfo.latestVersion);
+    renderUpdateIndicator();
+  }
+  renderUpdateDialog();
+  if (!state.updateInfo || state.updateInfo.status === "error") {
+    state.updateInfo = { status: "checking" };
+    renderUpdateDialog();
+    await loadUpdateInfo({ refresh: true });
+  }
+}
+
 const OCR_REVIEW_ORDER = ["age", "studyHours", "disciplineCourse", "declaration", "activist"];
 
 function stopOcrProgress() {
@@ -1887,6 +1973,8 @@ function attachEvents() {
   elements.feedbackProjectButton.addEventListener("click", () => elements.feedbackProjectDialog.showModal());
   elements.closeAboutProjectButton.addEventListener("click", () => elements.aboutProjectDialog.close());
   elements.closeFeedbackProjectButton.addEventListener("click", () => elements.feedbackProjectDialog.close());
+  elements.checkUpdateButton.addEventListener("click", openUpdateDialog);
+  elements.closeUpdateDialogButton.addEventListener("click", () => elements.updateDialog.close());
 
   elements.prevPageButton.addEventListener("click", () => movePdfPage(-1));
   elements.nextPageButton.addEventListener("click", () => movePdfPage(1));
@@ -1940,6 +2028,7 @@ async function bootstrap() {
   attachEvents();
   renderShortcuts();
   showImportStep(1);
+  void loadUpdateInfo();
   await loadSources();
   await loadBootstrapData();
 }

@@ -187,9 +187,15 @@
             </div>
             <div id="ocrReviewList" class="ocr-review-list"></div>
             <div class="project-footer" aria-label="项目信息">
-              <button id="aboutProjectButton" type="button">关于</button>
-              <span aria-hidden="true">·</span>
-              <button id="feedbackProjectButton" type="button">反馈</button>
+              <div class="project-footer-links">
+                <button id="aboutProjectButton" type="button">关于</button>
+                <span aria-hidden="true">·</span>
+                <button id="feedbackProjectButton" type="button">反馈</button>
+              </div>
+              <button id="checkUpdateButton" class="check-update-button" type="button">
+                检查更新
+                <span id="updateUnreadDot" class="update-unread-dot" aria-label="有新版本" hidden></span>
+              </button>
             </div>
           </aside>
         </div>
@@ -273,6 +279,25 @@
           <a href="mailto:jzcangshu@qq.com">jzcangshu@qq.com</a>
         </div>
         <img src="/assets/feedback.gif" alt="反馈表情">
+      </div>
+    </dialog>
+
+    <dialog id="updateDialog" class="compact-dialog update-dialog">
+      <div class="dialog-head">
+        <strong id="updateDialogTitle">检查更新</strong>
+        <button id="closeUpdateDialogButton" class="icon-button" type="button" title="关闭">×</button>
+      </div>
+      <div class="update-dialog-body">
+        <p id="updateVersionSummary" class="update-version-summary" aria-live="polite">正在检查更新...</p>
+        <pre id="updateChangelog" class="update-changelog" hidden></pre>
+        <a
+          id="downloadLatestButton"
+          class="primary-link"
+          href="https://github.com/jzcangshu/league-review-helper/releases/latest"
+          target="_blank"
+          rel="noopener noreferrer"
+          hidden
+        >前往 GitHub 下载最新版</a>
       </div>
     </dialog>
 

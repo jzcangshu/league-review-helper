@@ -808,13 +808,20 @@ button.primary:hover {
 
 .project-footer {
   display: flex;
-  flex: 0 0 42px;
+  flex: 0 0 68px;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 1px;
   border-top: 1px solid var(--line);
   background: #eee8de;
   color: var(--muted);
+}
+
+.project-footer-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .project-footer button {
@@ -829,6 +836,23 @@ button.primary:hover {
 .project-footer button:hover {
   color: var(--accent);
   background: transparent;
+}
+
+.project-footer .check-update-button {
+  position: relative;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.update-unread-dot {
+  position: absolute;
+  top: 1px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #eee8de;
+  border-radius: 50%;
+  background: #e1251b;
 }
 
 .ocr-review-item {
@@ -1478,6 +1502,49 @@ button.primary:hover {
 .project-feedback-links a {
   color: var(--accent);
   font-weight: 700;
+}
+
+.update-dialog {
+  width: min(500px, calc(100vw - 32px));
+}
+
+.update-dialog-body {
+  padding: 16px;
+}
+
+.update-version-summary {
+  margin: 0;
+  line-height: 1.65;
+}
+
+.update-changelog {
+  max-height: 42vh;
+  margin: 14px 0 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8f4ed;
+  color: var(--text);
+  font: 14px/1.7 var(--font);
+  white-space: pre-wrap;
+}
+
+.primary-link {
+  display: inline-flex;
+  min-height: 36px;
+  margin-top: 14px;
+  padding: 0 14px;
+  align-items: center;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.primary-link:hover {
+  background: #731731;
 }
 
 .dialog-actions {
