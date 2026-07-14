@@ -745,8 +745,10 @@ button.primary:hover {
 }
 
 .ocr-review-rail {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  overflow-y: auto;
+  overflow: hidden;
   overflow-x: hidden;
   border-left: 1px solid rgba(87, 67, 44, 0.24);
   background: #f5f1e9;
@@ -798,6 +800,35 @@ button.primary:hover {
 
 .ocr-review-list {
   display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.project-footer {
+  display: flex;
+  flex: 0 0 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  background: #eee8de;
+  color: var(--muted);
+}
+
+.project-footer button {
+  min-height: 28px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.project-footer button:hover {
+  color: var(--accent);
+  background: transparent;
 }
 
 .ocr-review-item {
@@ -1413,6 +1444,40 @@ button.primary:hover {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   line-height: 1.6;
+}
+
+.project-dialog {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.project-dialog-body {
+  padding: 14px;
+}
+
+.project-dialog-body p {
+  margin: 0 0 12px;
+  line-height: 1.65;
+}
+
+.project-dialog-body img {
+  display: block;
+  width: 100%;
+  max-height: 56vh;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #eee9e0;
+}
+
+.project-feedback-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 12px;
+}
+
+.project-feedback-links a {
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .dialog-actions {

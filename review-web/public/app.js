@@ -91,7 +91,9 @@ const elementIds = [
   "pdfCanvas", "pdfLoading", "pdfEmpty", "pdfStage", "pdfThumbnails", "ocrReviewRail",
   "ocrReviewProgressText", "ocrReviewProgressBar", "ocrReviewList", "issuesDialog",
   "closeIssuesDialogButton", "schoolsDialog", "closeSchoolsDialogButton", "sourceList",
-  "notesDialog", "closeNotesDialogButton", "notesEditor", "notesMessage", "saveNotesButton"
+  "notesDialog", "closeNotesDialogButton", "notesEditor", "notesMessage", "saveNotesButton",
+  "aboutProjectButton", "feedbackProjectButton", "aboutProjectDialog", "feedbackProjectDialog",
+  "closeAboutProjectButton", "closeFeedbackProjectButton"
 ];
 const elements = Object.fromEntries(elementIds.map((id) => [id, document.getElementById(id)]));
 
@@ -1421,6 +1423,58 @@ async function prefetchUpcomingOcr(currentItem, token) {
   }
 }
 
+function applyServerPdfThumbnails(payload, pdfDocument, loadToken) {
+  if (
+    !Array.isArray(payload?.pages) || payload.pages.length !== pdfDocument.numPages ||
+    loadToken !== state.pdfLoadToken || pdfDocument !== state.pdfDocument
+  ) return false;
+  state.pdfThumbnailObserver?.disconnect();
+  state.pdfThumbnailObserver = null;
+  state.pdfThumbnailQueue?.clear();
+  let fallbackStarted = false;
+  const startFallback = () => {
+    if (fallbackStarted || loadToken !== state.pdfLoadToken || pdfDocument !== state.pdfDocument) return;
+    fallbackStarted = true;
+    observePdfThumbnails(pdfDocument, loadToken);
+  };
+  for (const pageInfo of payload.pages) {
+    const button = elements.pdfThumbnails.querySelector(`.pdf-thumbnail[data-page="${pageInfo.page}"]`);
+    if (!button || button.dataset.thumbnailState === "rendered") continue;
+    button.dataset.thumbnailState = "loading";
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => {
+      if (loadToken !== state.pdfLoadToken || pdfDocument !== state.pdfDocument || !button.isConnected) return;
+      const canvas = button.querySelector("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      canvas.getContext("2d", { alpha: false }).drawImage(image, 0, 0);
+      button.dataset.thumbnailState = "rendered";
+      button.dataset.thumbnailSource = "cache";
+    };
+    image.onerror = () => {
+      if (button.dataset.thumbnailState === "loading") button.dataset.thumbnailState = "empty";
+      startFallback();
+    };
+    image.src = pageInfo.url;
+  }
+  return true;
+}
+
+function startPdfThumbnailLoading(pdfDocument, loadToken, manifestPromise) {
+  let fallbackStarted = false;
+  const startFallback = () => {
+    if (fallbackStarted || loadToken !== state.pdfLoadToken || pdfDocument !== state.pdfDocument) return;
+    fallbackStarted = true;
+    observePdfThumbnails(pdfDocument, loadToken);
+  };
+  const fallbackTimer = window.setTimeout(startFallback, 900);
+  manifestPromise.then((payload) => {
+    window.clearTimeout(fallbackTimer);
+    if (!applyServerPdfThumbnails(payload, pdfDocument, loadToken)) startFallback();
+  });
+}
+
 async function loadPdf(item) {
   state.pdfReviewStartedAt = 0;
   state.pdfPageChanged = false;
@@ -1450,6 +1504,7 @@ async function loadPdf(item) {
   elements.pdfLoading.hidden = false;
   elements.pdfLabel.textContent = `PDF 预览 | ${item.studentName}`;
   elements.matchInfo.textContent = item.matchQuality === "准确" ? "匹配正常" : item.matchQuality;
+  const thumbnailManifestPromise = api(`/api/pdf-thumbnails/${encodeURIComponent(item.id)}`).catch(() => null);
   try {
     const loadingTask = pdfjsLib.getDocument(`/api/pdf/${encodeURIComponent(item.id)}`);
     state.pdfLoadingTask = loadingTask;
@@ -1463,7 +1518,7 @@ async function loadPdf(item) {
     state.pdfPage = 1;
     buildPdfThumbnailSlots(pdfDocument, loadToken);
     await renderPdfPage({ fit: true });
-    observePdfThumbnails(pdfDocument, loadToken);
+    startPdfThumbnailLoading(pdfDocument, loadToken, thumbnailManifestPromise);
     state.pdfReviewStartedAt = Date.now();
     loadOcrHighlights(item, loadToken);
   } catch (error) {
@@ -1828,6 +1883,10 @@ function attachEvents() {
   elements.editNotesButton.addEventListener("click", editNotes);
   elements.closeNotesDialogButton.addEventListener("click", () => elements.notesDialog.close());
   elements.saveNotesButton.addEventListener("click", saveNotes);
+  elements.aboutProjectButton.addEventListener("click", () => elements.aboutProjectDialog.showModal());
+  elements.feedbackProjectButton.addEventListener("click", () => elements.feedbackProjectDialog.showModal());
+  elements.closeAboutProjectButton.addEventListener("click", () => elements.aboutProjectDialog.close());
+  elements.closeFeedbackProjectButton.addEventListener("click", () => elements.feedbackProjectDialog.close());
 
   elements.prevPageButton.addEventListener("click", () => movePdfPage(-1));
   elements.nextPageButton.addEventListener("click", () => movePdfPage(1));

@@ -33,6 +33,7 @@ review-web/review-web-port.txt
 review-web/.ocr-cache/
 review-web/.ocr-python/
 review-web/.ocr-models/
+review-web/.thumbnail-cache*/
 review-web/.runtime/
 
 # Python / Node caches

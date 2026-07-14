@@ -142,6 +142,7 @@ review-web/sources.local.json   已导入学校路径
 review-web/.ocr-cache/          OCR 识别缓存
 review-web/.ocr-python/         OCR 独立环境
 review-web/.ocr-models/         OCR 模型
+review-web/.thumbnail-cache/    PDF 缩略图缓存
 ```
 
 程序不会主动删除用户的 PDF、Excel 或审核结果。
@@ -201,6 +202,7 @@ review-web/public/                   网页界面
 review-web/lib/import-service.js     Excel 导入与名单核对
 review-web/lib/export-service.js     Excel 回填
 review-web/lib/ocr-service.js        OCR 环境、模型与缓存
+review-web/lib/thumbnail-service.js  PDF 缩略图生成与缓存
 codex-skills/league-review-prep/     罕见情况 AI 辅助技能
 ```
 

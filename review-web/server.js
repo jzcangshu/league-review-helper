@@ -12,6 +12,7 @@ const { analyzeImport, commitImport, listFilesRecursive } = require("./lib/impor
 const { writeSchoolResultsToExcel } = require("./lib/export-service");
 const { recognizePdf } = require("./lib/ocr-service");
 const { isExplicitlyReviewed, loadReviewStatus, setReviewed } = require("./lib/review-status");
+const { generatePdfThumbnails } = require("./lib/thumbnail-service");
 const {
   isSchoolActive,
   migrateSource,
@@ -35,6 +36,8 @@ const ocrCacheRoot = path.join(appRoot, ".ocr-cache");
 const ocrRuntimeRoot = path.join(appRoot, ".ocr-python");
 const ocrModelCacheRoot = path.join(appRoot, ".ocr-models");
 const ocrScriptPath = path.join(appRoot, "scripts", "ocr-pdf-v6.py");
+const thumbnailCacheRoot = path.join(appRoot, ".thumbnail-cache");
+const thumbnailScriptPath = path.join(appRoot, "scripts", "render-pdf-thumbnails.py");
 const host = "127.0.0.1";
 const preferredPort = 4173;
 const portFilePath = path.join(os.tmpdir(), "review-web-port.json");
@@ -289,6 +292,7 @@ function getContentType(filePath) {
   if (extension === ".js" || extension === ".mjs") return "application/javascript; charset=utf-8";
   if (extension === ".css") return "text/css; charset=utf-8";
   if (extension === ".pdf") return "application/pdf";
+  if (extension === ".png") return "image/png";
   if (extension === ".txt") return "text/plain; charset=utf-8";
   return "application/octet-stream";
 }
@@ -581,6 +585,34 @@ async function start() {
         const item = dataset.items.find((entry) => entry.id === decodeURIComponent(pdfMatch[1]));
         if (!item?.pdfPath) return sendJson(res, 404, { error: "没有找到对应的 PDF 资料。" });
         await serveFile(res, item.pdfPath, pdfMatch[2] ? "attachment" : "inline");
+        return;
+      }
+      const thumbnailMatch = pathname.match(/^\/api\/pdf-thumbnails\/([^/]+)(?:\/(\d+))?$/);
+      if (req.method === "GET" && thumbnailMatch) {
+        const item = dataset.items.find((entry) => entry.id === decodeURIComponent(thumbnailMatch[1]));
+        if (!item?.pdfPath) return sendJson(res, 404, { error: "没有找到对应的 PDF 资料。" });
+        const result = await generatePdfThumbnails({
+          pdfPath: item.pdfPath,
+          cacheRoot: thumbnailCacheRoot,
+          scriptPath: thumbnailScriptPath,
+          runtimeRoot: ocrRuntimeRoot
+        });
+        const requestedPage = Number(thumbnailMatch[2] || 0);
+        if (requestedPage) {
+          const page = result.pages.find((entry) => entry.page === requestedPage);
+          if (!page) return sendJson(res, 404, { error: "没有找到对应的 PDF 页面。" });
+          await serveFile(res, page.filePath);
+          return;
+        }
+        sendJson(res, 200, {
+          cached: result.cached,
+          pages: result.pages.map((page) => ({
+            page: page.page,
+            width: page.width,
+            height: page.height,
+            url: `/api/pdf-thumbnails/${encodeURIComponent(item.id)}/${page.page}`
+          }))
+        });
         return;
       }
       const ocrMatch = pathname.match(/^\/api\/ocr\/([^/]+)$/);

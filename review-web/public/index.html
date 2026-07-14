@@ -186,6 +186,11 @@
               <span id="ocrReviewProgressBar"></span>
             </div>
             <div id="ocrReviewList" class="ocr-review-list"></div>
+            <div class="project-footer" aria-label="项目信息">
+              <button id="aboutProjectButton" type="button">关于</button>
+              <span aria-hidden="true">·</span>
+              <button id="feedbackProjectButton" type="button">反馈</button>
+            </div>
           </aside>
         </div>
       </main>
@@ -243,6 +248,31 @@
       <div class="dialog-actions">
         <span id="notesMessage" class="hint"></span>
         <button id="saveNotesButton" class="primary" type="button">保存</button>
+      </div>
+    </dialog>
+
+    <dialog id="aboutProjectDialog" class="compact-dialog project-dialog">
+      <div class="dialog-head">
+        <strong>关于</strong>
+        <button id="closeAboutProjectButton" class="icon-button" type="button" title="关闭">×</button>
+      </div>
+      <div class="project-dialog-body">
+        <p>这里理应要写些项目简介和联系方式，但真没人会来看吧</p>
+        <img src="/assets/about.jpg" alt="好无聊，揣一下路过的网友">
+      </div>
+    </dialog>
+
+    <dialog id="feedbackProjectDialog" class="compact-dialog project-dialog">
+      <div class="dialog-head">
+        <strong>反馈</strong>
+        <button id="closeFeedbackProjectButton" class="icon-button" type="button" title="关闭">×</button>
+      </div>
+      <div class="project-dialog-body">
+        <div class="project-feedback-links">
+          <a href="https://github.com/jzcangshu/league-review-helper/issues" target="_blank" rel="noopener noreferrer">GitHub Issues（问题反馈）</a>
+          <a href="mailto:jzcangshu@qq.com">jzcangshu@qq.com</a>
+        </div>
+        <img src="/assets/feedback.gif" alt="反馈表情">
       </div>
     </dialog>
 
