@@ -98,7 +98,7 @@ const elementIds = [
   "aboutProjectButton", "feedbackProjectButton", "aboutProjectDialog", "feedbackProjectDialog",
   "closeAboutProjectButton", "closeFeedbackProjectButton", "checkUpdateButton", "updateUnreadDot",
   "updateDialog", "updateDialogTitle", "updateVersionSummary", "updateChangelog",
-  "downloadLatestButton", "closeUpdateDialogButton"
+  "updateDownloadActions", "downloadLatestButton", "closeUpdateDialogButton"
 ];
 const elements = Object.fromEntries(elementIds.map((id) => [id, document.getElementById(id)]));
 
@@ -1244,7 +1244,7 @@ function renderUpdateIndicator() {
 function renderUpdateDialog() {
   const info = state.updateInfo;
   elements.updateChangelog.hidden = true;
-  elements.downloadLatestButton.hidden = true;
+  elements.updateDownloadActions.hidden = true;
   if (!info || info.status === "checking") {
     elements.updateDialogTitle.textContent = "检查更新";
     elements.updateVersionSummary.textContent = "正在检查更新...";
@@ -1265,7 +1265,7 @@ function renderUpdateDialog() {
   elements.updateChangelog.textContent = info.changelog || "本次更新未提供更新日志。";
   elements.updateChangelog.hidden = false;
   elements.downloadLatestButton.href = info.releasesUrl || elements.downloadLatestButton.href;
-  elements.downloadLatestButton.hidden = false;
+  elements.updateDownloadActions.hidden = false;
 }
 
 async function loadUpdateInfo({ refresh = false, attempt = 0 } = {}) {

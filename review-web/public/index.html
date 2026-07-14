@@ -290,14 +290,21 @@
       <div class="update-dialog-body">
         <p id="updateVersionSummary" class="update-version-summary" aria-live="polite">正在检查更新...</p>
         <pre id="updateChangelog" class="update-changelog" hidden></pre>
-        <a
-          id="downloadLatestButton"
-          class="primary-link"
-          href="https://github.com/jzcangshu/league-review-helper/releases/latest"
-          target="_blank"
-          rel="noopener noreferrer"
-          hidden
-        >前往 GitHub 下载最新版</a>
+        <div id="updateDownloadActions" class="update-download-actions" hidden>
+          <a
+            class="primary-link"
+            href="https://gitee.com/jzcangshu/league-review-helper/releases"
+            target="_blank"
+            rel="noopener noreferrer"
+          >国内下载（Gitee）</a>
+          <a
+            id="downloadLatestButton"
+            class="primary-link"
+            href="https://github.com/jzcangshu/league-review-helper/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+          >国外下载（GitHub）</a>
+        </div>
       </div>
     </dialog>
 

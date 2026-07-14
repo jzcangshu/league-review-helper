@@ -1530,16 +1530,28 @@ button.primary:hover {
   white-space: pre-wrap;
 }
 
+.update-download-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.update-download-actions[hidden] {
+  display: none;
+}
+
 .primary-link {
   display: inline-flex;
   min-height: 36px;
-  margin-top: 14px;
   padding: 0 14px;
   align-items: center;
+  justify-content: center;
   border-radius: 7px;
   background: var(--accent);
   color: #fff;
   font-weight: 700;
+  text-align: center;
   text-decoration: none;
 }
 
