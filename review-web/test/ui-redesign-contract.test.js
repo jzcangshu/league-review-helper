@@ -95,6 +95,10 @@ test("小键盘提示与快捷短语标题处于同一行", () => {
   assert.doesNotMatch(html, /class="utility-panel-head hint">小键盘/);
 });
 
+test("快捷短语工具区由实际内容决定高度而非固定留白", () => {
+  assert.match(theme, /\.utility-dock\s*\{[\s\S]*?flex:\s*0 0 auto[\s\S]*?min-height:\s*0/);
+});
+
 test("资料选择提示占满进度条下方空间并垂直居中", () => {
   assert.match(theme, /\.import-body\s*\{[\s\S]*?display:\s*grid[\s\S]*?grid-template-rows:\s*auto minmax\(0,\s*1fr\)/);
   assert.match(theme, /\.guided-import-action\s*\{[\s\S]*?height:\s*100%[\s\S]*?align-content:\s*center[\s\S]*?justify-items:\s*center/);

@@ -1841,8 +1841,8 @@ h1 {
 }
 
 .utility-dock {
-  flex-basis: clamp(222px, 20.5vh, 246px);
-  min-height: clamp(222px, 20.5vh, 246px);
+  flex: 0 0 auto;
+  min-height: 0;
   padding-top: 11px;
   padding-bottom: 14px;
   border-top: 0;
