@@ -1938,6 +1938,7 @@ function attachEvents() {
     state.ocrEnabled = !state.ocrEnabled;
     elements.ocrToggleButton.classList.toggle("active", state.ocrEnabled);
     elements.ocrToggleButton.setAttribute("aria-pressed", String(state.ocrEnabled));
+    elements.ocrToggleButton.setAttribute("aria-checked", String(state.ocrEnabled));
     if (!state.ocrEnabled) {
       stopOcrProgress();
       elements.ocrOverlay.innerHTML = "";

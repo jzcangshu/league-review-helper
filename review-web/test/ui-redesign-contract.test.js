@@ -54,3 +54,22 @@ test("界面保持单屏左右审核工作台结构", () => {
   assert.match(theme, /height:\s*100dvh/);
   assert.match(theme, /\.pdf-workspace\s*\{[\s\S]*?grid-template-columns:/);
 });
+
+test("左侧审核区使用随窗口变化的字号和宽度", () => {
+  assert.match(theme, /--left-base-size:\s*clamp\(/);
+  assert.match(theme, /\.left-pane\s*\{[\s\S]*?font-size:\s*var\(--left-base-size\)/);
+  assert.match(theme, /grid-template-columns:\s*clamp\(600px,\s*34vw,\s*820px\)/);
+});
+
+test("OCR 标注具有明确的开关结构和无障碍状态", () => {
+  assert.match(html, /id="ocrToggleButton"[^>]*role="switch"[^>]*aria-checked="true"/);
+  assert.match(html, /class="ocr-switch-track"/);
+  assert.match(html, /class="ocr-switch-thumb"/);
+  assert.match(app, /ocrToggleButton\.setAttribute\("aria-checked",\s*String\(state\.ocrEnabled\)\)/);
+});
+
+test("OCR 核验结果使用独立卡片而非整行铺色", () => {
+  assert.match(theme, /\.ocr-review-list\s*\{[\s\S]*?display:\s*flex/);
+  assert.match(theme, /\.ocr-review-item\s*\{[\s\S]*?border-radius:\s*var\(--radius-md\)/);
+  assert.match(theme, /\.ocr-review-item\.pending\s*\{[\s\S]*?background:\s*var\(--surface\)/);
+});

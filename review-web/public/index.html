@@ -171,7 +171,10 @@
             </div>
             <div class="toolbar-control-group toolbar-ocr-group" aria-label="OCR 控制">
               <span id="ocrStatus" class="ocr-status" title="本地识别扫描件中的指定文字">OCR 等待中</span>
-              <button id="ocrToggleButton" class="small-button active" type="button" aria-pressed="true">OCR 标注</button>
+              <button id="ocrToggleButton" class="ocr-toggle active" type="button" role="switch" aria-checked="true" aria-pressed="true">
+                <span class="ocr-toggle-label">OCR 标注</span>
+                <span class="ocr-switch-track" aria-hidden="true"><span class="ocr-switch-thumb"></span></span>
+              </button>
             </div>
             <button id="downloadButton" class="small-button toolbar-download" type="button">下载</button>
           </div>
@@ -190,7 +193,10 @@
           </div>
           <aside id="ocrReviewRail" class="ocr-review-rail" aria-label="OCR 自动核验">
             <div class="ocr-review-head">
-              <strong>OCR 核验</strong>
+              <div class="ocr-review-heading-copy">
+                <strong>OCR 核验</strong>
+                <span>自动检查当前资料</span>
+              </div>
               <span id="ocrReviewProgressText">等待</span>
             </div>
             <div class="ocr-review-progress" aria-hidden="true">
