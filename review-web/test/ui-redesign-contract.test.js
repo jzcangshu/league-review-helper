@@ -56,9 +56,10 @@ test("界面保持单屏左右审核工作台结构", () => {
 });
 
 test("左侧审核区使用随窗口变化的字号和宽度", () => {
-  assert.match(theme, /--left-base-size:\s*clamp\(/);
+  assert.match(theme, /--left-base-size:\s*clamp\(16px,/);
   assert.match(theme, /\.left-pane\s*\{[\s\S]*?font-size:\s*var\(--left-base-size\)/);
   assert.match(theme, /grid-template-columns:\s*clamp\(600px,\s*34vw,\s*820px\)/);
+  assert.match(theme, /\.left-pane \.panel-head\s*\{[\s\S]*?font-size:\s*clamp\(22px,/);
 });
 
 test("OCR 标注具有明确的开关结构和无障碍状态", () => {
@@ -66,10 +67,25 @@ test("OCR 标注具有明确的开关结构和无障碍状态", () => {
   assert.match(html, /class="ocr-switch-track"/);
   assert.match(html, /class="ocr-switch-thumb"/);
   assert.match(app, /ocrToggleButton\.setAttribute\("aria-checked",\s*String\(state\.ocrEnabled\)\)/);
+  assert.match(theme, /\.toolbar-ocr-group\s*\{[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent/);
+  assert.match(theme, /\.ocr-toggle\s*\{[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent/);
 });
 
 test("OCR 核验结果使用独立卡片而非整行铺色", () => {
   assert.match(theme, /\.ocr-review-list\s*\{[\s\S]*?display:\s*flex/);
   assert.match(theme, /\.ocr-review-item\s*\{[\s\S]*?border-radius:\s*var\(--radius-md\)/);
   assert.match(theme, /\.ocr-review-item\.pending\s*\{[\s\S]*?background:\s*var\(--surface\)/);
+});
+
+test("Apple 设计层使用系统字体、清晰字号和足够点击面积", () => {
+  assert.match(theme, /--apple-body-size:\s*clamp\(16px,/);
+  assert.match(theme, /font-family:\s*-apple-system,/);
+  assert.match(theme, /\.left-pane :is\(button, select, input\)\s*\{[\s\S]*?min-height:\s*44px/);
+  assert.match(theme, /\.left-pane \.panel-head\s*\{[\s\S]*?font-size:\s*clamp\(22px,/);
+});
+
+test("Apple 设计层用材质建立层级并支持减少透明度", () => {
+  assert.match(theme, /\.left-pane\s*\{[\s\S]*?backdrop-filter:\s*blur\(/);
+  assert.match(theme, /\.pdf-toolbar\s*\{[\s\S]*?backdrop-filter:\s*blur\(/);
+  assert.match(theme, /@media \(prefers-reduced-transparency: reduce\)/);
 });
