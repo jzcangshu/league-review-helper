@@ -77,6 +77,23 @@ test("OCR 核验结果使用独立卡片而非整行铺色", () => {
   assert.match(theme, /\.ocr-review-item\.pending\s*\{[\s\S]*?background:\s*var\(--surface\)/);
 });
 
+test("左侧状态信息与操作按钮分别使用一致的视觉语法", () => {
+  assert.match(theme, /#importStatus,\s*#pdfStatus,\s*#saveStatus\s*\{[\s\S]*?min-height:\s*32px[\s\S]*?border-radius:\s*999px/);
+  assert.match(theme, /#manageSchoolsButton,\s*#reviewStateButton,\s*#editNotesButton\s*\{[\s\S]*?min-height:\s*38px[\s\S]*?border-radius:\s*11px/);
+});
+
+test("资料选择提示占满进度条下方空间并垂直居中", () => {
+  assert.match(theme, /\.import-body\s*\{[\s\S]*?display:\s*grid[\s\S]*?grid-template-rows:\s*auto minmax\(0,\s*1fr\)/);
+  assert.match(theme, /\.guided-import-action\s*\{[\s\S]*?height:\s*100%[\s\S]*?align-content:\s*center[\s\S]*?justify-items:\s*center/);
+});
+
+test("OCR 核验栏使用适合桌面审核的清晰字号", () => {
+  assert.match(theme, /\.pdf-workspace\s*\{[\s\S]*?clamp\(250px,\s*13vw,\s*290px\)/);
+  assert.match(theme, /\.ocr-review-head strong\s*\{[\s\S]*?font-size:\s*20px/);
+  assert.match(theme, /\.ocr-review-label\s*\{[\s\S]*?font-size:\s*17px/);
+  assert.match(theme, /\.ocr-review-detail\s*\{[\s\S]*?font-size:\s*15px/);
+});
+
 test("Apple 设计层使用系统字体、清晰字号和足够点击面积", () => {
   assert.match(theme, /--apple-body-size:\s*clamp\(15px,/);
   assert.match(theme, /font-family:\s*-apple-system,/);
