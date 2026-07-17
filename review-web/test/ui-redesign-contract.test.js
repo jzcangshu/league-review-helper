@@ -1,0 +1,56 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const test = require("node:test");
+
+const publicDir = path.join(__dirname, "..", "public");
+const html = fs.readFileSync(path.join(publicDir, "index.html"), "utf8");
+const app = fs.readFileSync(path.join(publicDir, "app.js"), "utf8");
+const theme = fs.readFileSync(path.join(publicDir, "emil-theme.css"), "utf8");
+
+const requiredIds = [
+  "studentTitle", "studentMeta", "prevButton", "nextButton",
+  "importStatus", "manageSchoolsButton", "importProgress", "pickPdfFolderButton", "pickExcelButton",
+  "schoolSelect", "studentSelect", "pdfStatus", "saveStatus",
+  "reviewText", "reviewStateButton", "editNotesButton", "noteList",
+  "shortcutToolTab", "exportToolTab", "shortcutList", "writeBackExcelButton",
+  "prevPageButton", "nextPageButton", "pageIndicator", "zoomOutButton", "zoomInButton", "rotateButton",
+  "ocrToggleButton", "ocrStatus", "downloadButton", "pdfThumbnails", "pdfStage", "ocrReviewRail",
+  "issuesDialog", "schoolsDialog", "notesDialog", "aboutProjectDialog", "feedbackProjectDialog", "updateDialog"
+];
+
+test("UI 重设计保留全部核心业务控件", () => {
+  for (const id of requiredIds) {
+    assert.match(html, new RegExp(`id=["']${id}["']`), `缺少核心控件 #${id}`);
+  }
+});
+
+test("所有脚本依赖的元素 ID 都存在于页面", () => {
+  const idsBlock = app.match(/const elementIds = \[([\s\S]*?)\];/);
+  assert.ok(idsBlock, "未找到 app.js 的 elementIds 契约");
+  const ids = [...idsBlock[1].matchAll(/["']([^"']+)["']/g)].map((match) => match[1]);
+
+  assert.ok(ids.length > 80, "元素契约数量异常");
+  for (const id of ids) {
+    assert.match(html, new RegExp(`id=["']${id}["']`), `页面缺少 app.js 依赖的 #${id}`);
+  }
+});
+
+test("页面继续使用原有业务脚本入口", () => {
+  assert.match(html, /<script type="module" src="\/app\.js"><\/script>/);
+  assert.match(html, /<link rel="stylesheet" href="\/emil-theme\.css" \/>/);
+});
+
+test("设计系统遵守高频交互和无障碍约束", () => {
+  assert.doesNotMatch(theme, /transition\s*:\s*all\b/);
+  assert.doesNotMatch(theme, /\bease-in\b(?!-out)/);
+  assert.match(theme, /button:active\s*\{[\s\S]*?transform:\s*scale\(0\.97\)/);
+  assert.match(theme, /:focus-visible/);
+  assert.match(theme, /@media \(prefers-reduced-motion: reduce\)/);
+});
+
+test("界面保持单屏左右审核工作台结构", () => {
+  assert.match(theme, /\.app-shell\s*\{[\s\S]*?grid-template-columns:/);
+  assert.match(theme, /height:\s*100dvh/);
+  assert.match(theme, /\.pdf-workspace\s*\{[\s\S]*?grid-template-columns:/);
+});
