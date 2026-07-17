@@ -78,7 +78,7 @@ const state = {
 
 const elementIds = [
   "studentTitle", "studentMeta", "schoolSelect", "studentSelect", "reviewText", "noteList", "prevButton",
-  "nextButton", "saveStatus", "pdfStatus", "matchInfo", "pdfLabel",
+  "nextButton", "saveStatus", "matchInfo", "pdfLabel",
   "shortcutList", "importStatus", "manageSchoolsButton", "importBody", "importStep1",
   "importStep2", "importStep3", "importStep4", "pickPdfFolderButton",
   "pdfPathPreview", "excelPathPreview", "pickExcelButton", "backToImportStep1Button",
@@ -1112,8 +1112,6 @@ function updateHeader(item) {
   elements.studentSelect.value = item.id;
   elements.prevButton.disabled = position <= 1;
   elements.nextButton.disabled = position >= filtered.length;
-  elements.pdfStatus.textContent = item.hasPdf ? "已匹配 PDF" : "缺少 PDF";
-  elements.pdfStatus.className = `badge ${item.hasPdf ? "ok" : "warn"}`;
   updateExportPanel();
 }
 

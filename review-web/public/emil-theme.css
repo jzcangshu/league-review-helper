@@ -1560,7 +1560,6 @@ h1 {
 }
 
 #importStatus,
-#pdfStatus,
 #saveStatus {
   display: inline-flex;
   min-height: 28px;
@@ -1580,7 +1579,6 @@ h1 {
 }
 
 #importStatus::before,
-#pdfStatus::before,
 #saveStatus::before {
   width: 8px;
   height: 8px;
@@ -1589,26 +1587,6 @@ h1 {
   background: var(--apple-blue);
   box-shadow: 0 0 0 3px rgba(10, 103, 232, 0.1);
   content: "";
-}
-
-#pdfStatus.ok {
-  background: transparent;
-  color: var(--apple-green);
-}
-
-#pdfStatus.ok::before {
-  background: var(--apple-green);
-  box-shadow: 0 0 0 3px rgba(22, 136, 95, 0.1);
-}
-
-#pdfStatus.warn {
-  background: transparent;
-  color: var(--apple-orange);
-}
-
-#pdfStatus.warn::before {
-  background: var(--apple-orange);
-  box-shadow: 0 0 0 3px rgba(199, 106, 0, 0.1);
 }
 
 #manageSchoolsButton,
@@ -2114,7 +2092,7 @@ h1 {
 }
 
 .pdf-workspace {
-  grid-template-columns: clamp(176px, 9.2vw, 202px) minmax(0, 1fr) clamp(250px, 13vw, 290px);
+  grid-template-columns: clamp(176px, 9.2vw, 202px) minmax(0, 1fr) clamp(226px, 12vw, 264px);
   background: var(--apple-canvas);
 }
 
@@ -2184,14 +2162,14 @@ h1 {
 
 .ocr-review-head strong {
   color: var(--apple-label);
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 730;
   letter-spacing: -0.02em;
 }
 
 .ocr-review-head span {
   color: var(--apple-secondary);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .ocr-review-head > #ocrReviewProgressText {
@@ -2199,7 +2177,7 @@ h1 {
   border-radius: 999px;
   background: var(--apple-fill);
   color: var(--apple-secondary);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .ocr-review-progress {
@@ -2288,7 +2266,7 @@ h1 {
 
 .ocr-review-label {
   color: var(--apple-label);
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 680;
   letter-spacing: -0.012em;
 }
@@ -2296,13 +2274,13 @@ h1 {
 .ocr-review-detail {
   margin-top: 9px;
   color: var(--apple-secondary);
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1.5;
 }
 
 .ocr-review-detail.emphasis {
   color: var(--apple-blue);
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 720;
 }
 
@@ -2321,7 +2299,7 @@ h1 {
   border: 0;
   border-radius: 9px;
   background: var(--apple-fill);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .ocr-review-action.insert {

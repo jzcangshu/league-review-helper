@@ -11,7 +11,7 @@ const theme = fs.readFileSync(path.join(publicDir, "emil-theme.css"), "utf8");
 const requiredIds = [
   "studentTitle", "studentMeta", "prevButton", "nextButton",
   "importStatus", "manageSchoolsButton", "importProgress", "pickPdfFolderButton", "pickExcelButton",
-  "schoolSelect", "studentSelect", "pdfStatus", "saveStatus",
+  "schoolSelect", "studentSelect", "saveStatus",
   "reviewText", "reviewStateButton", "editNotesButton", "noteList",
   "shortcutToolTab", "exportToolTab", "shortcutList", "writeBackExcelButton",
   "prevPageButton", "nextPageButton", "pageIndicator", "zoomOutButton", "zoomInButton", "rotateButton",
@@ -80,9 +80,14 @@ test("OCR 核验结果使用整卡状态底色支持快速扫视", () => {
 });
 
 test("左侧静态状态与可点击操作具有明显不同的视觉语法", () => {
-  assert.match(theme, /#importStatus,\s*#pdfStatus,\s*#saveStatus\s*\{[\s\S]*?background:\s*transparent[\s\S]*?border-radius:\s*0/);
-  assert.match(theme, /#importStatus::before,\s*#pdfStatus::before,\s*#saveStatus::before\s*\{[\s\S]*?border-radius:\s*50%/);
+  assert.match(theme, /#importStatus,\s*#saveStatus\s*\{[\s\S]*?background:\s*transparent[\s\S]*?border-radius:\s*0/);
+  assert.match(theme, /#importStatus::before,\s*#saveStatus::before\s*\{[\s\S]*?border-radius:\s*50%/);
   assert.match(theme, /#manageSchoolsButton,\s*#reviewStateButton,\s*#editNotesButton\s*\{[\s\S]*?border:\s*1px solid[\s\S]*?box-shadow:/);
+});
+
+test("名单标题不再显示冗余的 PDF 匹配状态", () => {
+  assert.doesNotMatch(html, /id="pdfStatus"/);
+  assert.doesNotMatch(app, /elements\.pdfStatus/);
 });
 
 test("小键盘提示与快捷短语标题处于同一行", () => {
@@ -96,10 +101,10 @@ test("资料选择提示占满进度条下方空间并垂直居中", () => {
 });
 
 test("OCR 核验栏使用适合桌面审核的清晰字号", () => {
-  assert.match(theme, /\.pdf-workspace\s*\{[\s\S]*?clamp\(250px,\s*13vw,\s*290px\)/);
-  assert.match(theme, /\.ocr-review-head strong\s*\{[\s\S]*?font-size:\s*20px/);
-  assert.match(theme, /\.ocr-review-label\s*\{[\s\S]*?font-size:\s*17px/);
-  assert.match(theme, /\.ocr-review-detail\s*\{[\s\S]*?font-size:\s*15px/);
+  assert.match(theme, /\.pdf-workspace\s*\{[\s\S]*?clamp\(226px,\s*12vw,\s*264px\)/);
+  assert.match(theme, /\.ocr-review-head strong\s*\{[\s\S]*?font-size:\s*22px/);
+  assert.match(theme, /\.ocr-review-label\s*\{[\s\S]*?font-size:\s*19px/);
+  assert.match(theme, /\.ocr-review-detail\s*\{[\s\S]*?font-size:\s*17px/);
 });
 
 test("Apple 设计层使用系统字体、清晰字号和足够点击面积", () => {
