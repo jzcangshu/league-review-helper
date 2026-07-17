@@ -8,7 +8,7 @@
 
 学生材料默认只在本机处理，不需要上传到第三方服务。
 
-<img width="2560" height="1305" alt="操作截图" src="https://github.com/user-attachments/assets/08b3fd49-3308-4c3d-91aa-eaae88d171a7" />
+![软件运行截图](review-web/public/assets/app-preview.png)
 
 ## 主要功能
 

@@ -2657,6 +2657,563 @@ h1 {
   background: var(--apple-blue);
 }
 
+.theme-toggle-button {
+  display: inline-flex;
+  min-width: 88px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.theme-toggle-icon {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--apple-fill);
+  color: var(--apple-blue);
+  font-size: 14px;
+  line-height: 1;
+  place-items: center;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --apple-blue: #5aa7ff;
+  --apple-blue-hover: #77b7ff;
+  --apple-label: #f3f5f8;
+  --apple-secondary: #b7c0cd;
+  --apple-tertiary: #8e98a8;
+  --apple-separator: rgba(235, 238, 245, 0.15);
+  --apple-fill: rgba(235, 238, 245, 0.09);
+  --apple-fill-strong: rgba(235, 238, 245, 0.15);
+  --apple-material: rgba(26, 29, 35, 0.92);
+  --apple-material-strong: rgba(31, 35, 43, 0.97);
+  --apple-canvas: #555d68;
+  --apple-sidebar-dark: #151920;
+  --apple-green: #48cc94;
+  --apple-orange: #ffb35c;
+  --apple-red: #ff7168;
+  --apple-shadow-window: 0 20px 58px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.24);
+  --apple-shadow-float: 0 24px 76px rgba(0, 0, 0, 0.58), 0 4px 16px rgba(0, 0, 0, 0.32);
+  --brand: var(--apple-blue);
+  --brand-hover: var(--apple-blue-hover);
+  --brand-subtle: rgba(90, 167, 255, 0.16);
+  --ink: var(--apple-label);
+  --ink-secondary: var(--apple-secondary);
+  --ink-tertiary: var(--apple-tertiary);
+  --stroke: var(--apple-separator);
+  --stroke-strong: rgba(235, 238, 245, 0.24);
+  --surface: #1d2128;
+  --surface-subtle: #181c22;
+  --surface-raised: #252a33;
+  --surface-inset: var(--apple-fill);
+  --canvas: #101216;
+  --pdf-canvas: var(--apple-canvas);
+  --pdf-rail: var(--apple-sidebar-dark);
+  --pdf-rail-muted: #aeb8c7;
+  --success: var(--apple-green);
+  --success-subtle: rgba(72, 204, 148, 0.14);
+  --warning: var(--apple-orange);
+  --warning-subtle: rgba(255, 179, 92, 0.14);
+  --error: var(--apple-red);
+  --error-subtle: rgba(255, 113, 104, 0.14);
+}
+
+html[data-theme="dark"],
+html[data-theme="dark"] body {
+  color: var(--apple-label);
+  background: #101216;
+}
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] .left-pane,
+html[data-theme="dark"] .right-pane,
+html[data-theme="dark"] .panel,
+html[data-theme="dark"] .top-bar,
+html[data-theme="dark"] .utility-dock,
+html[data-theme="dark"] .pdf-toolbar,
+html[data-theme="dark"] .compact-dialog {
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+
+html[data-theme="dark"] .left-pane,
+html[data-theme="dark"] .right-pane {
+  border-color: rgba(235, 238, 245, 0.1);
+  box-shadow: var(--apple-shadow-window);
+}
+
+html[data-theme="dark"] .left-pane {
+  background: rgba(25, 28, 34, 0.94);
+}
+
+html[data-theme="dark"] .right-pane {
+  background: #1a1e25;
+}
+
+html[data-theme="dark"] .top-bar,
+html[data-theme="dark"] .panel,
+html[data-theme="dark"] .notes-panel {
+  background: transparent;
+  box-shadow: inset 0 -1px var(--apple-separator);
+}
+
+html[data-theme="dark"] .import-panel,
+html[data-theme="dark"] .utility-dock {
+  background: rgba(19, 22, 27, 0.78);
+}
+
+html[data-theme="dark"] button,
+html[data-theme="dark"] select,
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea {
+  border-color: rgba(235, 238, 245, 0.18);
+  background-color: #242932;
+  color: var(--apple-label);
+  box-shadow: none;
+}
+
+html[data-theme="dark"] select option {
+  background: #242932;
+  color: var(--apple-label);
+}
+
+html[data-theme="dark"] button:hover {
+  border-color: rgba(235, 238, 245, 0.3);
+  background: #2b313b;
+  color: #fff;
+}
+
+html[data-theme="dark"] button:disabled,
+html[data-theme="dark"] select:disabled,
+html[data-theme="dark"] input:disabled {
+  color: #98a1af;
+  opacity: 0.68;
+}
+
+html[data-theme="dark"] .small-button,
+html[data-theme="dark"] #backToImportStep1Button,
+html[data-theme="dark"] #backToImportStep2Button,
+html[data-theme="dark"] #backToImportStep3Button {
+  border-color: rgba(235, 238, 245, 0.3);
+  background: #2b313b;
+  color: #f0f3f7;
+  opacity: 1;
+}
+
+html[data-theme="dark"] .small-button:hover,
+html[data-theme="dark"] #backToImportStep1Button:hover,
+html[data-theme="dark"] #backToImportStep2Button:hover,
+html[data-theme="dark"] #backToImportStep3Button:hover {
+  border-color: rgba(118, 183, 255, 0.62);
+  background: #343b47;
+  color: #fff;
+}
+
+html[data-theme="dark"] .small-button:disabled,
+html[data-theme="dark"] #backToImportStep1Button:disabled,
+html[data-theme="dark"] #backToImportStep2Button:disabled,
+html[data-theme="dark"] #backToImportStep3Button:disabled {
+  border-color: rgba(235, 238, 245, 0.12);
+  background: #232831;
+  color: #98a1af;
+  opacity: 0.68;
+}
+
+html[data-theme="dark"] button.primary,
+html[data-theme="dark"] .primary-link,
+html[data-theme="dark"] #reviewStateButton,
+html[data-theme="dark"] #reviewStateButton.primary {
+  border-color: #4297f5;
+  background: #3289e8;
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(26, 115, 214, 0.28);
+}
+
+html[data-theme="dark"] button.primary:hover,
+html[data-theme="dark"] .primary-link:hover,
+html[data-theme="dark"] #reviewStateButton:hover,
+html[data-theme="dark"] #reviewStateButton.primary:hover {
+  border-color: #62acff;
+  background: #4299f4;
+}
+
+html[data-theme="dark"] .brand-mark {
+  background: linear-gradient(145deg, #4b9cff, #246fd0);
+  box-shadow: 0 7px 18px rgba(30, 111, 211, 0.34);
+}
+
+html[data-theme="dark"] .nav-actions button,
+html[data-theme="dark"] #manageSchoolsButton,
+html[data-theme="dark"] #editNotesButton {
+  border-color: rgba(235, 238, 245, 0.19);
+  background: #252a32;
+  color: var(--apple-label);
+}
+
+html[data-theme="dark"] .theme-toggle-icon {
+  background: rgba(255, 196, 88, 0.14);
+  color: #ffd166;
+}
+
+html[data-theme="dark"] .section-number,
+html[data-theme="dark"] .tab-icon {
+  background: rgba(90, 167, 255, 0.16);
+  color: var(--apple-blue);
+}
+
+html[data-theme="dark"] .import-body {
+  border-top-color: var(--apple-separator);
+}
+
+html[data-theme="dark"] .import-progress span {
+  background: rgba(235, 238, 245, 0.08);
+  color: var(--apple-secondary);
+}
+
+html[data-theme="dark"] .import-progress span.active {
+  background: #3289e8;
+  color: #fff;
+}
+
+html[data-theme="dark"] .import-progress span.done {
+  background: rgba(72, 204, 148, 0.14);
+  color: var(--apple-green);
+}
+
+html[data-theme="dark"] .guided-import-action .primary,
+html[data-theme="dark"] #viewIssuesButton {
+  background: #3289e8;
+  color: #fff;
+}
+
+html[data-theme="dark"] #schoolSelect,
+html[data-theme="dark"] #studentSelect,
+html[data-theme="dark"] #reviewText,
+html[data-theme="dark"] .shortcut-input {
+  border-color: rgba(235, 238, 245, 0.16);
+  background: #20242c;
+  color: var(--apple-label);
+}
+
+html[data-theme="dark"] #reviewText::placeholder,
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: #858e9e;
+}
+
+html[data-theme="dark"] #reviewText:focus,
+html[data-theme="dark"] input:focus,
+html[data-theme="dark"] textarea:focus,
+html[data-theme="dark"] select:focus {
+  border-color: var(--apple-blue);
+  background: #252a33;
+  box-shadow: 0 0 0 4px rgba(90, 167, 255, 0.17);
+}
+
+html[data-theme="dark"] .note-list {
+  color: #d0d5dd;
+}
+
+html[data-theme="dark"] .note-list strong {
+  color: #fff;
+}
+
+html[data-theme="dark"] .note-list .note-alert {
+  color: #ff857d;
+}
+
+html[data-theme="dark"] .utility-tabs {
+  background: rgba(235, 238, 245, 0.08);
+}
+
+html[data-theme="dark"] .utility-tab {
+  color: var(--apple-secondary);
+  background: transparent;
+}
+
+html[data-theme="dark"] .utility-tab.active {
+  background: #2a2f38;
+  color: var(--apple-blue);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.32);
+}
+
+html[data-theme="dark"] .shortcut-use,
+html[data-theme="dark"] .ocr-review-action.jump {
+  background: rgba(90, 167, 255, 0.15);
+  color: var(--apple-blue);
+}
+
+html[data-theme="dark"] .export-row,
+html[data-theme="dark"] .export-open-actions {
+  color: var(--apple-label);
+}
+
+html[data-theme="dark"] .pdf-toolbar {
+  border-bottom-color: var(--apple-separator);
+  background: rgba(28, 32, 39, 0.9);
+  box-shadow: inset 0 -1px rgba(235, 238, 245, 0.1);
+}
+
+html[data-theme="dark"] .pdf-title-icon {
+  background: rgba(255, 113, 104, 0.15);
+  color: #ff8a83;
+}
+
+html[data-theme="dark"] .toolbar-control-group {
+  background: rgba(235, 238, 245, 0.07);
+  color: var(--apple-secondary);
+}
+
+html[data-theme="dark"] .toolbar-control-group button,
+html[data-theme="dark"] .toolbar-download {
+  background: transparent;
+  color: var(--apple-label);
+}
+
+html[data-theme="dark"] .toolbar-ocr-group,
+html[data-theme="dark"] #ocrToggleButton,
+html[data-theme="dark"] #ocrToggleButton:hover {
+  background: transparent;
+}
+
+html[data-theme="dark"] .ocr-switch-track {
+  background: #4a515d;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .ocr-switch-thumb {
+  background: #f7f8fa;
+}
+
+html[data-theme="dark"] .ocr-toggle.active .ocr-switch-track {
+  background: #3289e8;
+}
+
+html[data-theme="dark"] .pdf-workspace,
+html[data-theme="dark"] .pdf-stage,
+html[data-theme="dark"] .pdf-empty {
+  background: #555d68;
+  color: #e2e6ec;
+}
+
+html[data-theme="dark"] .pdf-thumbnails {
+  background: #141820;
+}
+
+html[data-theme="dark"] .pdf-thumbnail.active {
+  background: rgba(65, 145, 238, 0.3);
+  box-shadow: inset 0 0 0 2px #67adff;
+}
+
+html[data-theme="dark"] .ocr-review-rail {
+  background: #171b22;
+  box-shadow: inset 1px 0 rgba(235, 238, 245, 0.1);
+}
+
+html[data-theme="dark"] .ocr-review-head {
+  background: #20242c;
+  box-shadow: inset 0 -1px var(--apple-separator);
+}
+
+html[data-theme="dark"] .ocr-review-head > #ocrReviewProgressText,
+html[data-theme="dark"] .project-footer {
+  background: rgba(235, 238, 245, 0.06);
+}
+
+html[data-theme="dark"] .ocr-review-progress {
+  background: rgba(235, 238, 245, 0.1);
+}
+
+html[data-theme="dark"] .ocr-review-item.pending {
+  background: linear-gradient(90deg, rgba(255, 179, 92, 0.11), rgba(34, 38, 46, 0.98) 42%);
+  box-shadow: inset 3px 0 #ffb35c, inset 0 0 0 1px rgba(255, 179, 92, 0.34);
+}
+
+html[data-theme="dark"] .ocr-review-item.pass {
+  background: linear-gradient(90deg, rgba(72, 204, 148, 0.1), rgba(34, 38, 46, 0.98) 42%);
+  box-shadow: inset 3px 0 #48cc94, inset 0 0 0 1px rgba(72, 204, 148, 0.31);
+}
+
+html[data-theme="dark"] .ocr-review-item.fail {
+  background: linear-gradient(90deg, rgba(255, 113, 104, 0.11), rgba(34, 38, 46, 0.98) 42%);
+  box-shadow: inset 3px 0 #ff7168, inset 0 0 0 1px rgba(255, 113, 104, 0.34);
+}
+
+html[data-theme="dark"] .ocr-review-item.pending:hover {
+  background: linear-gradient(90deg, rgba(255, 179, 92, 0.16), #292e37 42%);
+}
+
+html[data-theme="dark"] .ocr-review-item.pass:hover {
+  background: linear-gradient(90deg, rgba(72, 204, 148, 0.15), #292e37 42%);
+}
+
+html[data-theme="dark"] .ocr-review-item.fail:hover {
+  background: linear-gradient(90deg, rgba(255, 113, 104, 0.16), #292e37 42%);
+}
+
+html[data-theme="dark"] .ocr-review-title {
+  color: #f5f7fa;
+}
+
+html[data-theme="dark"] .ocr-review-detail {
+  color: #d9dee6;
+}
+
+html[data-theme="dark"] .ocr-review-action {
+  border-color: rgba(90, 167, 255, 0.28);
+  background: rgba(90, 167, 255, 0.14);
+  color: #8bc5ff;
+}
+
+html[data-theme="dark"] .ocr-review-item.fail .ocr-review-detail {
+  color: #ff918a;
+}
+
+html[data-theme="dark"] .project-footer {
+  color: var(--apple-secondary);
+  box-shadow: inset 0 1px var(--apple-separator);
+}
+
+html[data-theme="dark"] .project-footer button {
+  background: transparent;
+  color: var(--apple-secondary);
+}
+
+html[data-theme="dark"] dialog::backdrop {
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(5px);
+}
+
+html[data-theme="dark"] .compact-dialog {
+  border-color: rgba(235, 238, 245, 0.16);
+  background: #1d2128;
+  color: var(--apple-label);
+  box-shadow: var(--apple-shadow-float);
+}
+
+html[data-theme="dark"] .dialog-head,
+html[data-theme="dark"] .dialog-actions,
+html[data-theme="dark"] .analysis-dialog-footer {
+  background: #20242c;
+  box-shadow: inset 0 -1px var(--apple-separator);
+}
+
+html[data-theme="dark"] .dialog-actions,
+html[data-theme="dark"] .analysis-dialog-footer {
+  box-shadow: inset 0 1px var(--apple-separator);
+}
+
+html[data-theme="dark"] .dialog-head .icon-button {
+  background: rgba(235, 238, 245, 0.09);
+  color: var(--apple-secondary);
+}
+
+html[data-theme="dark"] .dialog-scroll,
+html[data-theme="dark"] .analysis-page,
+html[data-theme="dark"] .project-dialog-body,
+html[data-theme="dark"] .update-dialog-body {
+  background: #1d2128;
+  color: var(--apple-label);
+}
+
+html[data-theme="dark"] .analysis-wizard-progress {
+  background: #191d23;
+  box-shadow: inset 0 -1px var(--apple-separator);
+}
+
+html[data-theme="dark"] .analysis-wizard-progress span {
+  color: var(--apple-secondary);
+}
+
+html[data-theme="dark"] .analysis-wizard-progress span.active {
+  background: rgba(90, 167, 255, 0.16);
+  color: var(--apple-blue);
+}
+
+html[data-theme="dark"] .analysis-wizard-progress span.done {
+  background: rgba(72, 204, 148, 0.14);
+  color: var(--apple-green);
+}
+
+html[data-theme="dark"] .excel-layout-editor,
+html[data-theme="dark"] .recognition-group,
+html[data-theme="dark"] .issue-block,
+html[data-theme="dark"] .source-row,
+html[data-theme="dark"] .conflict-row,
+html[data-theme="dark"] .name-match-row,
+html[data-theme="dark"] .report-output,
+html[data-theme="dark"] .notes-dialog textarea,
+html[data-theme="dark"] .update-changelog {
+  border-color: rgba(235, 238, 245, 0.15);
+  background: #232831;
+  color: var(--apple-label);
+  box-shadow: none;
+}
+
+html[data-theme="dark"] .recognition-group-head {
+  background: #1b1f26;
+  border-bottom-color: var(--apple-separator);
+}
+
+html[data-theme="dark"] .recognition-row + .recognition-row,
+html[data-theme="dark"] .source-row + .source-row,
+html[data-theme="dark"] .conflict-row + .conflict-row {
+  border-top-color: var(--apple-separator);
+}
+
+html[data-theme="dark"] .history-preview-table {
+  border-color: rgba(235, 238, 245, 0.17);
+  background: #20242c;
+  color: var(--apple-label);
+}
+
+html[data-theme="dark"] .history-preview-table th {
+  background: #2a3039;
+  color: #d7dce4;
+}
+
+html[data-theme="dark"] .history-preview-table th,
+html[data-theme="dark"] .history-preview-table td {
+  border-bottom-color: rgba(235, 238, 245, 0.12);
+}
+
+html[data-theme="dark"] .history-preview-table tr.suspicious td {
+  background: rgba(255, 113, 104, 0.13);
+  color: #ff9a94;
+}
+
+html[data-theme="dark"] .excel-layout-message {
+  color: var(--apple-green);
+}
+
+html[data-theme="dark"] .excel-layout-message.error,
+html[data-theme="dark"] .analysis-dialog-footer .hint.error {
+  color: var(--apple-red);
+}
+
+html[data-theme="dark"] .typo-choice.active {
+  border-color: rgba(90, 167, 255, 0.4);
+  background: rgba(90, 167, 255, 0.15);
+  color: var(--apple-blue);
+}
+
+html[data-theme="dark"] .project-feedback-links a {
+  border-color: rgba(90, 167, 255, 0.25);
+  background: rgba(90, 167, 255, 0.11);
+  color: #84c1ff;
+}
+
+html[data-theme="dark"] .update-version-summary,
+html[data-theme="dark"] .update-changelog,
+html[data-theme="dark"] .report-output {
+  color: #d8dde5;
+}
+
+html[data-theme="dark"] * {
+  scrollbar-color: #555e6c transparent;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .left-pane button:hover {
     filter: brightness(0.985);
@@ -2686,5 +3243,11 @@ h1 {
   .compact-dialog {
     background: #fff;
     backdrop-filter: none;
+  }
+
+  html[data-theme="dark"] .left-pane,
+  html[data-theme="dark"] .pdf-toolbar,
+  html[data-theme="dark"] .compact-dialog {
+    background: #1d2128;
   }
 }

@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>入团志愿书审核工具</title>
+    <script>
+      (() => {
+        const saved = localStorage.getItem("review-color-theme-v1");
+        const theme = saved === "dark" || saved === "light"
+          ? saved
+          : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
     <link rel="stylesheet" href="/styles.css" />
     <link rel="stylesheet" href="/emil-theme.css" />
   </head>
@@ -22,6 +32,10 @@
             </div>
           </div>
           <div class="nav-actions">
+            <button id="themeToggleButton" class="theme-toggle-button" type="button" aria-pressed="false">
+              <span id="themeToggleIcon" class="theme-toggle-icon" aria-hidden="true">☾</span>
+              <span id="themeToggleLabel">深色</span>
+            </button>
             <button id="prevButton" type="button">上一个</button>
             <button id="nextButton" type="button">下一个</button>
           </div>

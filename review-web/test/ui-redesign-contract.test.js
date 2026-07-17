@@ -9,7 +9,7 @@ const app = fs.readFileSync(path.join(publicDir, "app.js"), "utf8");
 const theme = fs.readFileSync(path.join(publicDir, "emil-theme.css"), "utf8");
 
 const requiredIds = [
-  "studentTitle", "studentMeta", "prevButton", "nextButton",
+  "studentTitle", "studentMeta", "prevButton", "nextButton", "themeToggleButton", "themeToggleIcon", "themeToggleLabel",
   "importStatus", "manageSchoolsButton", "importProgress", "pickPdfFolderButton", "pickExcelButton",
   "schoolSelect", "studentSelect", "saveStatus",
   "reviewText", "reviewStateButton", "editNotesButton", "noteList",
@@ -39,6 +39,42 @@ test("所有脚本依赖的元素 ID 都存在于页面", () => {
 test("页面继续使用原有业务脚本入口", () => {
   assert.match(html, /<script type="module" src="\/app\.js"><\/script>/);
   assert.match(html, /<link rel="stylesheet" href="\/emil-theme\.css" \/>/);
+});
+
+test("主题在样式加载前初始化并提供一键切换", () => {
+  assert.match(html, /review-color-theme-v1[\s\S]*?document\.documentElement\.dataset\.theme[\s\S]*?<link rel="stylesheet"/);
+  assert.match(html, /id="themeToggleButton"[^>]*aria-pressed="false"/);
+  assert.match(app, /function applyTheme\(theme/);
+  assert.match(app, /localStorage\.setItem\(THEME_STORAGE_KEY, resolved\)/);
+  assert.match(app, /themeToggleButton\.addEventListener\("click", toggleTheme\)/);
+});
+
+test("暗色主题覆盖全部主要界面区域", () => {
+  for (const selector of [
+    ".left-pane", ".right-pane", ".import-panel", ".utility-dock", ".pdf-toolbar",
+    ".pdf-stage", ".pdf-thumbnails", ".ocr-review-rail", ".ocr-review-item.pending",
+    ".compact-dialog", ".analysis-wizard-progress", ".excel-layout-editor",
+    ".history-preview-table", ".recognition-group", ".report-output",
+    ".notes-dialog textarea", ".update-changelog", ".project-feedback-links a"
+  ]) {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    assert.match(theme, new RegExp(`html\\[data-theme="dark"\\] ${escaped}`), `暗色主题缺少 ${selector}`);
+  }
+  assert.match(theme, /html\[data-theme="dark"\]\s*\{[\s\S]*?color-scheme:\s*dark/);
+});
+
+test("暗色 OCR 卡片使用中性卡面和清晰状态边缘", () => {
+  assert.match(theme, /html\[data-theme="dark"\] \.ocr-review-item\.pending\s*\{[\s\S]*?linear-gradient\([\s\S]*?rgba\(34, 38, 46,[\s\S]*?inset 3px 0 #ffb35c/);
+  assert.match(theme, /html\[data-theme="dark"\] \.ocr-review-item\.pass\s*\{[\s\S]*?linear-gradient\([\s\S]*?rgba\(34, 38, 46,[\s\S]*?inset 3px 0 #48cc94/);
+  assert.match(theme, /html\[data-theme="dark"\] \.ocr-review-item\.fail\s*\{[\s\S]*?linear-gradient\([\s\S]*?rgba\(34, 38, 46,[\s\S]*?inset 3px 0 #ff7168/);
+  assert.match(theme, /html\[data-theme="dark"\] \.ocr-review-detail\s*\{[\s\S]*?color:\s*#d9dee6/);
+});
+
+test("暗色次要操作与禁用控件保持清晰层级", () => {
+  for (const id of ["backToImportStep1Button", "backToImportStep2Button", "backToImportStep3Button"]) {
+    assert.match(theme, new RegExp(`html\\[data-theme="dark"\\][\\s\\S]*?#${id}[\\s\\S]*?background:\\s*#2b313b[\\s\\S]*?color:\\s*#f0f3f7`));
+  }
+  assert.match(theme, /html\[data-theme="dark"\] button:disabled,[\s\S]*?color:\s*#98a1af/);
 });
 
 test("设计系统遵守高频交互和无障碍约束", () => {

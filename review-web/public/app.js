@@ -7,6 +7,7 @@ import { parseNoteMarkdown } from "/note-markdown.js";
 import { createThumbnailRenderQueue } from "/thumbnail-render-queue.js";
 import { calculateContainedPdfScale } from "/pdf-fit.js";
 import { createPdfPageCache, pdfPageRenderKey } from "/pdf-page-cache.js";
+import { oppositeTheme, resolveTheme, THEME_STORAGE_KEY } from "/theme-preference.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/vendor/pdf.worker.mjs";
 
@@ -82,7 +83,7 @@ const state = {
 
 const elementIds = [
   "studentTitle", "studentMeta", "schoolSelect", "studentSelect", "reviewText", "noteList", "prevButton",
-  "nextButton", "saveStatus", "matchInfo", "pdfLabel",
+  "nextButton", "saveStatus", "matchInfo", "pdfLabel", "themeToggleButton", "themeToggleIcon", "themeToggleLabel",
   "shortcutList", "importStatus", "manageSchoolsButton", "importBody", "importStep1",
   "importStep2", "importStep3", "importStep4", "pickPdfFolderButton",
   "pdfPathPreview", "excelPathPreview", "pickExcelButton", "backToImportStep1Button",
@@ -106,6 +107,23 @@ const elementIds = [
   "updateDownloadActions", "downloadLatestButton", "closeUpdateDialogButton"
 ];
 const elements = Object.fromEntries(elementIds.map((id) => [id, document.getElementById(id)]));
+
+function applyTheme(theme, { persist = false } = {}) {
+  const resolved = resolveTheme(theme, window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.dataset.theme = resolved;
+  document.documentElement.style.colorScheme = resolved;
+  if (persist) localStorage.setItem(THEME_STORAGE_KEY, resolved);
+  const dark = resolved === "dark";
+  elements.themeToggleButton.setAttribute("aria-pressed", String(dark));
+  elements.themeToggleButton.setAttribute("aria-label", dark ? "切换到浅色模式" : "切换到深色模式");
+  elements.themeToggleButton.title = dark ? "切换到浅色模式" : "切换到深色模式";
+  elements.themeToggleIcon.textContent = dark ? "☀" : "☾";
+  elements.themeToggleLabel.textContent = dark ? "浅色" : "深色";
+}
+
+function toggleTheme() {
+  applyTheme(oppositeTheme(document.documentElement.dataset.theme), { persist: true });
+}
 
 async function api(url, options = {}) {
   const response = await fetch(url, {
@@ -2000,6 +2018,7 @@ async function rotatePdf() {
 }
 
 function attachEvents() {
+  elements.themeToggleButton.addEventListener("click", toggleTheme);
   elements.manageSchoolsButton.addEventListener("click", () => elements.schoolsDialog.showModal());
   elements.closeSchoolsDialogButton.addEventListener("click", () => elements.schoolsDialog.close());
   elements.pickPdfFolderButton.addEventListener("click", async () => {
@@ -2148,7 +2167,12 @@ function attachEvents() {
 }
 
 async function bootstrap() {
+  applyTheme(document.documentElement.dataset.theme);
   attachEvents();
+  const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+  systemTheme.addEventListener?.("change", (event) => {
+    if (!localStorage.getItem(THEME_STORAGE_KEY)) applyTheme(event.matches ? "dark" : "light");
+  });
   renderShortcuts();
   showImportStep(1);
   void loadUpdateInfo();
