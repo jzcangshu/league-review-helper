@@ -1589,6 +1589,33 @@ h1 {
   content: "";
 }
 
+#saveStatus[data-tone="reviewed"] {
+  color: var(--apple-green);
+}
+
+#saveStatus[data-tone="reviewed"]::before {
+  background: var(--apple-green);
+  box-shadow: 0 0 0 3px rgba(22, 136, 95, 0.1);
+}
+
+#saveStatus[data-tone="unreviewed"] {
+  color: var(--apple-orange);
+}
+
+#saveStatus[data-tone="unreviewed"]::before {
+  background: var(--apple-orange);
+  box-shadow: 0 0 0 3px rgba(199, 106, 0, 0.1);
+}
+
+#saveStatus[data-tone="error"] {
+  color: var(--apple-red);
+}
+
+#saveStatus[data-tone="error"]::before {
+  background: var(--apple-red);
+  box-shadow: 0 0 0 3px rgba(217, 45, 32, 0.1);
+}
+
 #manageSchoolsButton,
 #reviewStateButton,
 #editNotesButton {
@@ -1821,9 +1848,9 @@ h1 {
 .note-list {
   padding-left: 28px;
   color: #3f4858;
-  font-size: 0.94em;
+  font-size: 1.04em;
   font-weight: 460;
-  line-height: 1.56;
+  line-height: 1.62;
 }
 
 .note-list li {
@@ -2210,33 +2237,33 @@ h1 {
 .ocr-review-item.pending,
 .ocr-review-item.pass,
 .ocr-review-item.fail {
-  background: rgba(199, 106, 0, 0.1);
+  background: #fff9ef;
 }
 
 .ocr-review-item.pending {
-  box-shadow: 0 1px 3px rgba(24, 32, 47, 0.06), inset 0 0 0 1px rgba(199, 106, 0, 0.24);
+  box-shadow: 0 1px 3px rgba(24, 32, 47, 0.05), inset 0 0 0 1px #f0d49f;
 }
 
 .ocr-review-item.pass {
-  background: rgba(22, 136, 95, 0.1);
-  box-shadow: 0 1px 3px rgba(24, 32, 47, 0.06), inset 0 0 0 1px rgba(22, 136, 95, 0.22);
+  background: #f1faf5;
+  box-shadow: 0 1px 3px rgba(24, 32, 47, 0.05), inset 0 0 0 1px #b8e0ca;
 }
 
 .ocr-review-item.fail {
-  background: rgba(217, 45, 32, 0.1);
-  box-shadow: 0 1px 3px rgba(24, 32, 47, 0.06), inset 0 0 0 1px rgba(217, 45, 32, 0.24);
+  background: #fff3f2;
+  box-shadow: 0 1px 3px rgba(24, 32, 47, 0.05), inset 0 0 0 1px #f1c0bc;
 }
 
 .ocr-review-item.pending:hover {
-  background: rgba(199, 106, 0, 0.14);
+  background: #fff6e8;
 }
 
 .ocr-review-item.pass:hover {
-  background: rgba(22, 136, 95, 0.14);
+  background: #ebf8f0;
 }
 
 .ocr-review-item.fail:hover {
-  background: rgba(217, 45, 32, 0.14);
+  background: #ffedeb;
 }
 
 .ocr-review-title-row {

@@ -85,6 +85,12 @@ test("左侧静态状态与可点击操作具有明显不同的视觉语法", ()
   assert.match(theme, /#manageSchoolsButton,\s*#reviewStateButton,\s*#editNotesButton\s*\{[\s\S]*?border:\s*1px solid[\s\S]*?box-shadow:/);
 });
 
+test("已审与未审核状态使用不同颜色的状态点", () => {
+  assert.match(app, /saveStatus\.dataset\.tone\s*=\s*tone/);
+  assert.match(theme, /#saveStatus\[data-tone="reviewed"\]::before\s*\{[\s\S]*?background:\s*var\(--apple-green\)/);
+  assert.match(theme, /#saveStatus\[data-tone="unreviewed"\]::before\s*\{[\s\S]*?background:\s*var\(--apple-orange\)/);
+});
+
 test("名单标题不再显示冗余的 PDF 匹配状态", () => {
   assert.doesNotMatch(html, /id="pdfStatus"/);
   assert.doesNotMatch(app, /elements\.pdfStatus/);
@@ -109,6 +115,16 @@ test("OCR 核验栏使用适合桌面审核的清晰字号", () => {
   assert.match(theme, /\.ocr-review-head strong\s*\{[\s\S]*?font-size:\s*22px/);
   assert.match(theme, /\.ocr-review-label\s*\{[\s\S]*?font-size:\s*19px/);
   assert.match(theme, /\.ocr-review-detail\s*\{[\s\S]*?font-size:\s*17px/);
+});
+
+test("OCR 状态卡使用干净的独立浅色表面", () => {
+  assert.match(theme, /\.ocr-review-item\.pending\s*\{[\s\S]*?background:\s*#fff9ef/);
+  assert.match(theme, /\.ocr-review-item\.pass\s*\{[\s\S]*?background:\s*#f1faf5/);
+  assert.match(theme, /\.ocr-review-item\.fail\s*\{[\s\S]*?background:\s*#fff3f2/);
+});
+
+test("审核注意事项正文使用更清晰的字号", () => {
+  assert.match(theme, /\.note-list\s*\{[\s\S]*?font-size:\s*1\.04em/);
 });
 
 test("Apple 设计层使用系统字体、清晰字号和足够点击面积", () => {

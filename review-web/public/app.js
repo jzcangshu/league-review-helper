@@ -128,6 +128,12 @@ function saveShortcuts() {
 
 function setSaveStatus(text) {
   elements.saveStatus.textContent = text;
+  let tone = "neutral";
+  if (text === "未审核") tone = "unreviewed";
+  else if (text.startsWith("已审") || text === "已保存" || text === "已自动保存") tone = "reviewed";
+  else if (text.includes("失败") || text.includes("无法")) tone = "error";
+  else if (text.startsWith("正在")) tone = "working";
+  elements.saveStatus.dataset.tone = tone;
 }
 
 function markDirty(dirty, message = "") {
