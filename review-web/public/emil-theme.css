@@ -1563,29 +1563,52 @@ h1 {
 #pdfStatus,
 #saveStatus {
   display: inline-flex;
-  min-height: 32px;
+  min-height: 28px;
   max-width: 15em;
-  padding: 5px 10px;
+  padding: 0;
   align-items: center;
-  border-radius: 999px;
-  background: var(--apple-fill);
+  gap: 7px;
+  border-radius: 0;
+  background: transparent;
   color: var(--apple-secondary);
-  font-size: 0.78em;
-  font-weight: 650;
+  font-size: 0.8em;
+  font-weight: 620;
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+#importStatus::before,
+#pdfStatus::before,
+#saveStatus::before {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: var(--apple-blue);
+  box-shadow: 0 0 0 3px rgba(10, 103, 232, 0.1);
+  content: "";
+}
+
 #pdfStatus.ok {
-  background: rgba(22, 136, 95, 0.11);
+  background: transparent;
   color: var(--apple-green);
 }
 
+#pdfStatus.ok::before {
+  background: var(--apple-green);
+  box-shadow: 0 0 0 3px rgba(22, 136, 95, 0.1);
+}
+
 #pdfStatus.warn {
-  background: rgba(199, 106, 0, 0.11);
+  background: transparent;
   color: var(--apple-orange);
+}
+
+#pdfStatus.warn::before {
+  background: var(--apple-orange);
+  box-shadow: 0 0 0 3px rgba(199, 106, 0, 0.1);
 }
 
 #manageSchoolsButton,
@@ -1593,19 +1616,21 @@ h1 {
 #editNotesButton {
   min-height: 38px;
   padding: 0 13px;
-  border: 0;
+  border: 1px solid rgba(60, 60, 67, 0.2);
   border-radius: 11px;
-  background: var(--apple-fill);
-  color: var(--apple-secondary);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--apple-label);
   font-size: 0.8em;
-  font-weight: 660;
-  box-shadow: none;
+  font-weight: 680;
+  box-shadow: 0 1px 2px rgba(24, 32, 47, 0.08);
 }
 
 #manageSchoolsButton:hover,
 #editNotesButton:hover {
-  background: rgba(118, 118, 128, 0.16);
+  border-color: rgba(60, 60, 67, 0.28);
+  background: #fff;
   color: var(--apple-label);
+  box-shadow: 0 2px 6px rgba(24, 32, 47, 0.11);
 }
 
 .left-pane .small-button,
@@ -1772,15 +1797,17 @@ h1 {
 }
 
 #reviewStateButton {
-  border: 0;
-  background: rgba(10, 103, 232, 0.11);
-  color: var(--apple-blue);
+  border-color: var(--apple-blue);
+  background: var(--apple-blue);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(10, 103, 232, 0.22);
 }
 
 #reviewStateButton.primary,
 #reviewStateButton.primary:hover {
-  background: rgba(10, 103, 232, 0.12);
-  color: var(--apple-blue);
+  border-color: #075fcf;
+  background: #075fcf;
+  color: #fff;
 }
 
 #reviewText {
@@ -1885,6 +1912,12 @@ h1 {
   margin-bottom: 7px;
   color: var(--apple-tertiary);
   font-size: 0.82em;
+}
+
+.shortcut-tab-hint {
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
 }
 
 .shortcut-list {
@@ -2199,15 +2232,33 @@ h1 {
 .ocr-review-item.pending,
 .ocr-review-item.pass,
 .ocr-review-item.fail {
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(199, 106, 0, 0.1);
+}
+
+.ocr-review-item.pending {
+  box-shadow: 0 1px 3px rgba(24, 32, 47, 0.06), inset 0 0 0 1px rgba(199, 106, 0, 0.24);
 }
 
 .ocr-review-item.pass {
+  background: rgba(22, 136, 95, 0.1);
   box-shadow: 0 1px 3px rgba(24, 32, 47, 0.06), inset 0 0 0 1px rgba(22, 136, 95, 0.22);
 }
 
 .ocr-review-item.fail {
+  background: rgba(217, 45, 32, 0.1);
   box-shadow: 0 1px 3px rgba(24, 32, 47, 0.06), inset 0 0 0 1px rgba(217, 45, 32, 0.24);
+}
+
+.ocr-review-item.pending:hover {
+  background: rgba(199, 106, 0, 0.14);
+}
+
+.ocr-review-item.pass:hover {
+  background: rgba(22, 136, 95, 0.14);
+}
+
+.ocr-review-item.fail:hover {
+  background: rgba(217, 45, 32, 0.14);
 }
 
 .ocr-review-title-row {

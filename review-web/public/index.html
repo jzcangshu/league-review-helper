@@ -126,11 +126,10 @@
 
         <section class="utility-dock" aria-label="审核辅助工具">
           <div class="utility-tabs" role="tablist" aria-label="审核辅助功能">
-            <button id="shortcutToolTab" class="utility-tab active" type="button" role="tab" aria-selected="true" aria-controls="shortcutToolPanel"><span class="tab-icon" aria-hidden="true">⌘</span>快捷短语</button>
+            <button id="shortcutToolTab" class="utility-tab active" type="button" role="tab" aria-selected="true" aria-controls="shortcutToolPanel"><span class="tab-icon" aria-hidden="true">⌘</span>快捷短语<span class="shortcut-tab-hint">（小键盘快速插入）</span></button>
             <button id="exportToolTab" class="utility-tab" type="button" role="tab" aria-selected="false" aria-controls="exportToolPanel"><span class="tab-icon" aria-hidden="true">5</span>回填 Excel</button>
           </div>
           <div id="shortcutToolPanel" class="utility-panel" role="tabpanel" aria-labelledby="shortcutToolTab">
-            <div class="utility-panel-head hint">小键盘 `1-6` 直接插入</div>
             <div id="shortcutList" class="shortcut-list"></div>
           </div>
           <div id="exportToolPanel" class="utility-panel" role="tabpanel" aria-labelledby="exportToolTab" hidden>

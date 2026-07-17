@@ -71,15 +71,23 @@ test("OCR 标注具有明确的开关结构和无障碍状态", () => {
   assert.match(theme, /\.ocr-toggle\s*\{[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent/);
 });
 
-test("OCR 核验结果使用独立卡片而非整行铺色", () => {
+test("OCR 核验结果使用整卡状态底色支持快速扫视", () => {
   assert.match(theme, /\.ocr-review-list\s*\{[\s\S]*?display:\s*flex/);
   assert.match(theme, /\.ocr-review-item\s*\{[\s\S]*?border-radius:\s*var\(--radius-md\)/);
-  assert.match(theme, /\.ocr-review-item\.pending\s*\{[\s\S]*?background:\s*var\(--surface\)/);
+  assert.match(theme, /\.ocr-review-item\.pending\s*\{[\s\S]*?background:\s*rgba\(199,\s*106,\s*0,/);
+  assert.match(theme, /\.ocr-review-item\.pass\s*\{[\s\S]*?background:\s*rgba\(22,\s*136,\s*95,/);
+  assert.match(theme, /\.ocr-review-item\.fail\s*\{[\s\S]*?background:\s*rgba\(217,\s*45,\s*32,/);
 });
 
-test("左侧状态信息与操作按钮分别使用一致的视觉语法", () => {
-  assert.match(theme, /#importStatus,\s*#pdfStatus,\s*#saveStatus\s*\{[\s\S]*?min-height:\s*32px[\s\S]*?border-radius:\s*999px/);
-  assert.match(theme, /#manageSchoolsButton,\s*#reviewStateButton,\s*#editNotesButton\s*\{[\s\S]*?min-height:\s*38px[\s\S]*?border-radius:\s*11px/);
+test("左侧静态状态与可点击操作具有明显不同的视觉语法", () => {
+  assert.match(theme, /#importStatus,\s*#pdfStatus,\s*#saveStatus\s*\{[\s\S]*?background:\s*transparent[\s\S]*?border-radius:\s*0/);
+  assert.match(theme, /#importStatus::before,\s*#pdfStatus::before,\s*#saveStatus::before\s*\{[\s\S]*?border-radius:\s*50%/);
+  assert.match(theme, /#manageSchoolsButton,\s*#reviewStateButton,\s*#editNotesButton\s*\{[\s\S]*?border:\s*1px solid[\s\S]*?box-shadow:/);
+});
+
+test("小键盘提示与快捷短语标题处于同一行", () => {
+  assert.match(html, /id="shortcutToolTab"[\s\S]*?快捷短语<span class="shortcut-tab-hint">（小键盘快速插入）<\/span>/);
+  assert.doesNotMatch(html, /class="utility-panel-head hint">小键盘/);
 });
 
 test("资料选择提示占满进度条下方空间并垂直居中", () => {
