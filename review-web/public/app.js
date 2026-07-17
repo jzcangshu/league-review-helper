@@ -463,7 +463,7 @@ function renderHistoryPreview(analysis) {
   const heading = document.createElement("div");
   heading.className = "history-preview-title";
   const title = document.createElement("strong");
-  title.textContent = "Excel 导入审核意见预览";
+  title.textContent = "审核意见识别结果";
   const detected = document.createElement("span");
   detected.className = "hint";
   detected.textContent = analysis.resultColumn ? `当前读取：${analysis.resultColumn}` : "当前不读取历史审核意见";

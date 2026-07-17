@@ -127,6 +127,19 @@ test("审核注意事项正文使用更清晰的字号", () => {
   assert.match(theme, /\.note-list\s*\{[\s\S]*?font-size:\s*1\.04em/);
 });
 
+test("Excel 导入核对弹窗使用统一清晰的桌面字号", () => {
+  assert.match(theme, /\.analysis-dialog\s*\{[\s\S]*?font-size:\s*16px/);
+  assert.match(theme, /\.analysis-wizard-progress span\s*\{[\s\S]*?font-size:\s*16px/);
+  assert.match(theme, /\.excel-layout-editor label > span\s*\{[\s\S]*?font-size:\s*14px/);
+  assert.match(theme, /\.history-preview-table\s*\{[\s\S]*?font-size:\s*15px/);
+  assert.match(theme, /\.report-output\s*\{[\s\S]*?font-size:\s*16px/);
+});
+
+test("Excel 审核意见页避免重复标题并保留清晰说明层级", () => {
+  assert.match(app, /title\.textContent = "审核意见识别结果"/);
+  assert.match(theme, /\.history-preview-title\s*\{[\s\S]*?display:\s*grid/);
+});
+
 test("Apple 设计层使用系统字体、清晰字号和足够点击面积", () => {
   assert.match(theme, /--apple-body-size:\s*clamp\(15px,/);
   assert.match(theme, /font-family:\s*-apple-system,/);

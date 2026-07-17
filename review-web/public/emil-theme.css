@@ -2465,6 +2465,182 @@ h1 {
   color: var(--apple-secondary);
 }
 
+.analysis-dialog {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.analysis-dialog .dialog-head {
+  min-height: 68px;
+  padding: 15px 18px;
+}
+
+.dialog-head > strong,
+.analysis-dialog-head strong {
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.analysis-wizard-progress {
+  padding: 14px 18px;
+}
+
+.analysis-wizard-progress span {
+  min-height: 42px;
+  padding: 10px 12px;
+  font-size: 16px;
+  font-weight: 680;
+  line-height: 22px;
+}
+
+.analysis-page {
+  padding: 18px;
+}
+
+.history-preview-title {
+  display: grid;
+  align-items: start;
+  justify-content: stretch;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+
+.history-preview-title strong {
+  color: var(--apple-label);
+  font-size: 19px;
+  font-weight: 720;
+  line-height: 1.3;
+}
+
+.history-preview-title .hint {
+  color: var(--apple-secondary);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.excel-layout-editor {
+  grid-template-columns: minmax(150px, 1fr) 110px minmax(150px, 1fr) minmax(220px, 1.45fr) auto;
+  gap: 10px;
+  margin-bottom: 11px;
+  padding: 13px;
+}
+
+.excel-layout-editor label {
+  gap: 6px;
+}
+
+.excel-layout-editor label > span {
+  color: var(--apple-secondary);
+  font-size: 14px;
+  font-weight: 680;
+  line-height: 1.3;
+}
+
+.excel-layout-editor select,
+.excel-layout-editor input,
+.excel-layout-editor button {
+  min-height: 42px;
+  font-size: 16px;
+}
+
+.excel-layout-editor button {
+  padding-inline: 15px;
+  white-space: nowrap;
+}
+
+.excel-layout-message {
+  margin-bottom: 11px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.history-preview-table {
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.history-preview-table th,
+.history-preview-table td {
+  padding: 9px 10px;
+}
+
+.history-preview-table th {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.history-preview-table td small {
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.recognition-group-head {
+  padding: 13px 14px;
+}
+
+.recognition-group-head strong {
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.recognition-count,
+.recognition-empty {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.recognition-list {
+  padding-inline: 14px;
+}
+
+.recognition-row {
+  min-height: 64px;
+  padding: 11px 0;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.recognition-row select,
+.recognition-row button,
+.name-match-row select,
+.name-match-row button,
+.typo-choice {
+  min-height: 40px;
+  font-size: 15px;
+}
+
+.issue-block,
+.name-match-row,
+.conflict-row {
+  padding: 12px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.report-output {
+  padding: 18px;
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.analysis-dialog-footer {
+  min-height: 76px;
+  padding: 14px 18px;
+  gap: 10px;
+}
+
+.analysis-dialog-footer .hint {
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.analysis-dialog-footer button {
+  min-height: 44px;
+  padding-inline: 18px;
+  font-size: 16px;
+}
+
 .recognition-group-head {
   background: rgba(245, 247, 250, 0.76);
 }
