@@ -56,10 +56,10 @@ test("界面保持单屏左右审核工作台结构", () => {
 });
 
 test("左侧审核区使用随窗口变化的字号和宽度", () => {
-  assert.match(theme, /--left-base-size:\s*clamp\(16px,/);
+  assert.match(theme, /--apple-body-size:\s*clamp\(15px,/);
   assert.match(theme, /\.left-pane\s*\{[\s\S]*?font-size:\s*var\(--left-base-size\)/);
-  assert.match(theme, /grid-template-columns:\s*clamp\(600px,\s*34vw,\s*820px\)/);
-  assert.match(theme, /\.left-pane \.panel-head\s*\{[\s\S]*?font-size:\s*clamp\(22px,/);
+  assert.match(theme, /grid-template-columns:\s*clamp\(700px,\s*40vw,\s*1040px\)/);
+  assert.match(theme, /\.left-pane \.panel-head\s*\{[\s\S]*?font-size:\s*clamp\(20px,/);
 });
 
 test("OCR 标注具有明确的开关结构和无障碍状态", () => {
@@ -78,10 +78,11 @@ test("OCR 核验结果使用独立卡片而非整行铺色", () => {
 });
 
 test("Apple 设计层使用系统字体、清晰字号和足够点击面积", () => {
-  assert.match(theme, /--apple-body-size:\s*clamp\(16px,/);
+  assert.match(theme, /--apple-body-size:\s*clamp\(15px,/);
   assert.match(theme, /font-family:\s*-apple-system,/);
-  assert.match(theme, /\.left-pane :is\(button, select, input\)\s*\{[\s\S]*?min-height:\s*44px/);
-  assert.match(theme, /\.left-pane \.panel-head\s*\{[\s\S]*?font-size:\s*clamp\(22px,/);
+  assert.match(theme, /\.left-pane :is\(button, select, input\)\s*\{[\s\S]*?min-height:\s*40px/);
+  assert.match(theme, /\.left-pane \.panel-head\s*\{[\s\S]*?font-size:\s*clamp\(20px,/);
+  assert.match(theme, /#ocrToggleButton,[\s\S]*?background:\s*transparent/);
 });
 
 test("Apple 设计层用材质建立层级并支持减少透明度", () => {

@@ -5,6 +5,7 @@ import { analyzeOcrReview } from "/ocr-review.js";
 import { classifyImportDecisions, importCandidateNames } from "/import-decisions.js";
 import { parseNoteMarkdown } from "/note-markdown.js";
 import { createThumbnailRenderQueue } from "/thumbnail-render-queue.js";
+import { calculateContainedPdfScale } from "/pdf-fit.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/vendor/pdf.worker.mjs";
 
@@ -1618,9 +1619,13 @@ async function loadPdf(item) {
 
 function fitPdfScale(page) {
   const baseViewport = page.getViewport({ scale: 1, rotation: state.pdfRotation });
-  const availableWidth = Math.max(1, elements.pdfStage.clientWidth - 24);
-  const availableHeight = Math.max(1, elements.pdfStage.clientHeight - 24);
-  return Math.min(availableWidth / baseViewport.width, availableHeight / baseViewport.height);
+  return calculateContainedPdfScale({
+    pageWidth: baseViewport.width,
+    pageHeight: baseViewport.height,
+    containerWidth: elements.pdfStage.clientWidth,
+    containerHeight: elements.pdfStage.clientHeight,
+    padding: 20
+  });
 }
 
 async function renderPdfPage({ fit = false } = {}) {

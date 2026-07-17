@@ -1366,7 +1366,7 @@ h1 {
 
 /* Apple-design pass: one coherent visual system, business behavior unchanged. */
 :root {
-  --apple-body-size: clamp(16px, min(0.9vw, 1.5vh), 19px);
+  --apple-body-size: clamp(15px, min(0.78vw, 1.25vh), 17px);
   --apple-blue: #0a67e8;
   --apple-blue-hover: #075dcc;
   --apple-label: #15171b;
@@ -1413,7 +1413,7 @@ body {
 }
 
 .app-shell {
-  grid-template-columns: clamp(650px, 35vw, 860px) minmax(0, 1fr);
+  grid-template-columns: clamp(700px, 40vw, 1040px) minmax(0, 1fr);
   gap: 8px;
   padding: 8px;
 }
@@ -1436,7 +1436,7 @@ body {
 }
 
 .left-pane :is(button, select, input) {
-  min-height: 44px;
+  min-height: 40px;
   font-size: 1em;
 }
 
@@ -1456,8 +1456,8 @@ body {
 }
 
 .top-bar {
-  min-height: clamp(88px, 8.2vh, 104px);
-  padding-block: 14px;
+  min-height: clamp(78px, 7.4vh, 90px);
+  padding-block: 12px;
   border-bottom: 0;
   background: rgba(255, 255, 255, 0.7);
   box-shadow: inset 0 -1px var(--apple-separator);
@@ -1468,10 +1468,10 @@ body {
 }
 
 .brand-mark {
-  flex-basis: clamp(48px, 2.6vw, 56px);
-  width: clamp(48px, 2.6vw, 56px);
-  height: clamp(48px, 2.6vw, 56px);
-  border-radius: 14px;
+  flex-basis: clamp(44px, 2.35vw, 50px);
+  width: clamp(44px, 2.35vw, 50px);
+  height: clamp(44px, 2.35vw, 50px);
+  border-radius: 13px;
   background: linear-gradient(155deg, #2f89ff 0%, #0869e9 62%, #0755c5 100%);
   font-size: 1.08em;
   box-shadow: 0 8px 20px rgba(10, 103, 232, 0.25), inset 0 1px rgba(255, 255, 255, 0.42);
@@ -1488,7 +1488,7 @@ body {
 h1 {
   margin-top: 1px;
   color: var(--apple-label);
-  font-size: clamp(30px, 1.72vw, 36px);
+  font-size: clamp(27px, 1.5vw, 32px);
   font-weight: 760;
   letter-spacing: -0.035em;
   line-height: 1.08;
@@ -1510,9 +1510,9 @@ h1 {
 }
 
 .nav-actions button {
-  min-width: 82px;
-  min-height: 46px;
-  padding-inline: 16px;
+  min-width: 76px;
+  min-height: 40px;
+  padding-inline: 14px;
   border-color: rgba(60, 60, 67, 0.18);
   background: rgba(255, 255, 255, 0.74);
   color: var(--apple-label);
@@ -1521,16 +1521,16 @@ h1 {
 }
 
 .panel {
-  padding-block: clamp(12px, 1.25vh, 16px);
+  padding-block: clamp(10px, 1vh, 13px);
   border-bottom: 0;
   background: transparent;
   box-shadow: inset 0 -1px var(--apple-separator);
 }
 
 .left-pane .panel-head {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   color: var(--apple-label);
-  font-size: clamp(22px, 1.22vw, 27px);
+  font-size: clamp(20px, 1.08vw, 23px);
   font-weight: 720;
   letter-spacing: -0.026em;
   line-height: 1.12;
@@ -1571,25 +1571,25 @@ h1 {
 }
 
 .import-panel {
-  padding-top: 12px;
-  padding-bottom: 14px;
+  padding-top: 10px;
+  padding-bottom: 12px;
   background: rgba(244, 246, 250, 0.58);
 }
 
 .import-body {
-  height: clamp(174px, 16.5vh, 202px);
-  margin-top: 11px;
-  padding-top: 12px;
+  height: clamp(158px, 14.8vh, 180px);
+  margin-top: 9px;
+  padding-top: 10px;
   border-top: 1px solid var(--apple-separator);
 }
 
 .import-step {
-  height: clamp(104px, 10.3vh, 126px);
+  height: clamp(94px, 9vh, 108px);
 }
 
 .import-progress {
   gap: 5px;
-  margin-bottom: 12px;
+  margin-bottom: 9px;
 }
 
 .import-progress::before {
@@ -1597,8 +1597,8 @@ h1 {
 }
 
 .import-progress span {
-  min-height: 34px;
-  padding: 7px 8px;
+  min-height: 30px;
+  padding: 5px 7px;
   border: 0;
   border-radius: 10px;
   background: var(--apple-fill);
@@ -1620,8 +1620,8 @@ h1 {
 }
 
 .guided-import-action {
-  min-height: clamp(98px, 9.6vh, 118px);
-  gap: 9px;
+  min-height: clamp(88px, 8.3vh, 100px);
+  gap: 7px;
 }
 
 .step-title {
@@ -1639,8 +1639,8 @@ h1 {
 
 .guided-import-action .primary,
 #viewIssuesButton {
-  min-height: 46px;
-  padding-inline: 18px;
+  min-height: 42px;
+  padding-inline: 16px;
   border: 0;
   border-radius: 12px;
   background: var(--apple-blue);
@@ -1696,7 +1696,7 @@ h1 {
 
 #schoolSelect,
 #studentSelect {
-  min-height: 46px;
+  min-height: 42px;
   padding: 0 34px 0 13px;
   border-color: rgba(60, 60, 67, 0.14);
   background-color: rgba(255, 255, 255, 0.78);
@@ -1707,7 +1707,7 @@ h1 {
 }
 
 .editor-panel {
-  padding-block: 13px 15px;
+  padding-block: 11px 13px;
 }
 
 #reviewStateButton {
@@ -1717,10 +1717,10 @@ h1 {
 }
 
 #reviewText {
-  height: calc(1.55em * 2 + 34px);
-  min-height: calc(1.55em * 2 + 34px);
-  max-height: calc(1.55em * 2 + 34px);
-  padding: 13px 15px;
+  height: calc(1.5em * 2 + 28px);
+  min-height: calc(1.5em * 2 + 28px);
+  max-height: calc(1.5em * 2 + 28px);
+  padding: 11px 13px;
   border-color: rgba(60, 60, 67, 0.14);
   border-radius: 13px;
   background: rgba(255, 255, 255, 0.72);
@@ -1749,9 +1749,9 @@ h1 {
 .note-list {
   padding-left: 28px;
   color: #3f4858;
-  font-size: 0.92em;
+  font-size: 0.94em;
   font-weight: 460;
-  line-height: 1.62;
+  line-height: 1.56;
 }
 
 .note-list li {
@@ -1769,8 +1769,8 @@ h1 {
 }
 
 .utility-dock {
-  flex-basis: clamp(252px, 22.5vh, 276px);
-  min-height: clamp(252px, 22.5vh, 276px);
+  flex-basis: clamp(222px, 20.5vh, 246px);
+  min-height: clamp(222px, 20.5vh, 246px);
   padding-top: 11px;
   padding-bottom: 14px;
   border-top: 0;
@@ -1788,8 +1788,8 @@ h1 {
 }
 
 .utility-tab {
-  height: 38px;
-  min-height: 38px;
+  height: 34px;
+  min-height: 34px;
   border: 0;
   border-radius: 10px;
   color: var(--apple-secondary);
@@ -1836,8 +1836,8 @@ h1 {
 }
 
 .shortcut-input {
-  height: 38px;
-  min-height: 38px;
+  height: 36px;
+  min-height: 36px;
   padding-inline: 12px;
   border-color: rgba(60, 60, 67, 0.13);
   background: rgba(255, 255, 255, 0.78);
@@ -1847,7 +1847,7 @@ h1 {
 
 .shortcut-use {
   min-width: 54px;
-  min-height: 38px;
+  min-height: 36px;
   border: 0;
   background: rgba(10, 103, 232, 0.1);
   color: var(--apple-blue);
@@ -1868,8 +1868,8 @@ h1 {
 .pdf-toolbar {
   position: relative;
   z-index: 3;
-  min-height: 64px;
-  padding: 10px 14px;
+  min-height: 58px;
+  padding: 8px 12px;
   border-bottom: 0;
   background: rgba(252, 252, 253, 0.78);
   backdrop-filter: blur(20px) saturate(170%);
@@ -1960,6 +1960,15 @@ h1 {
   border-radius: 0;
   background: transparent;
   color: var(--apple-label);
+  box-shadow: none;
+}
+
+#ocrToggleButton,
+#ocrToggleButton.active,
+#ocrToggleButton:hover,
+#ocrToggleButton.active:hover {
+  border: 0;
+  background: transparent;
   box-shadow: none;
 }
 
