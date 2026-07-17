@@ -6,6 +6,7 @@ import { classifyImportDecisions, importCandidateNames } from "/import-decisions
 import { parseNoteMarkdown } from "/note-markdown.js";
 import { createThumbnailRenderQueue } from "/thumbnail-render-queue.js";
 import { calculateContainedPdfScale } from "/pdf-fit.js";
+import { createPdfPageCache, pdfPageRenderKey } from "/pdf-page-cache.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "/vendor/pdf.worker.mjs";
 
@@ -58,6 +59,9 @@ const state = {
   pdfPageChanged: false,
   resizeTimer: null,
   pdfResizeObserver: null,
+  pdfPageCache: createPdfPageCache({ maxEntries: 4 }),
+  pdfPagePrefetchIdleId: null,
+  pdfPagePrefetch: null,
   exportSchool: "",
   exportExcelPath: "",
   lastExport: null,
@@ -1566,11 +1570,33 @@ function startPdfThumbnailLoading(pdfDocument, loadToken, manifestPromise) {
   });
 }
 
+function cancelScheduledPdfPagePrefetch() {
+  const scheduled = state.pdfPagePrefetchIdleId;
+  if (!scheduled) return;
+  if (scheduled.type === "idle" && "cancelIdleCallback" in window) window.cancelIdleCallback(scheduled.id);
+  else window.clearTimeout(scheduled.id);
+  state.pdfPagePrefetchIdleId = null;
+}
+
+function cancelPdfPagePrefetch(exceptKey = "") {
+  cancelScheduledPdfPagePrefetch();
+  const prefetch = state.pdfPagePrefetch;
+  if (!prefetch || prefetch.key === exceptKey) return;
+  prefetch.task.cancel();
+  state.pdfPagePrefetch = null;
+}
+
+function clearPdfPageRenderCache() {
+  cancelPdfPagePrefetch();
+  state.pdfPageCache.clear();
+}
+
 async function loadPdf(item) {
   state.pdfReviewStartedAt = 0;
   state.pdfPageChanged = false;
   const loadToken = ++state.pdfLoadToken;
   resetPdfThumbnails();
+  clearPdfPageRenderCache();
   if (state.pdfRenderTask) state.pdfRenderTask.cancel();
   if (state.pdfLoadingTask) await state.pdfLoadingTask.destroy().catch(() => {});
   state.pdfLoadingTask = null;
@@ -1632,6 +1658,102 @@ function fitPdfScale(page) {
   });
 }
 
+function createPdfPageRenderSpec(page, { fit = false, commitScale = false } = {}) {
+  let scale = state.pdfScale;
+  if (fit || state.pdfAutoFit) scale = fitPdfScale(page);
+  if (commitScale) state.pdfScale = scale;
+  const viewport = page.getViewport({ scale, rotation: state.pdfRotation });
+  const outputScale = Math.min(window.devicePixelRatio || 1, 2);
+  const key = pdfPageRenderKey({
+    loadToken: state.pdfLoadToken,
+    pageNumber: page.pageNumber,
+    rotation: state.pdfRotation,
+    scale,
+    outputScale
+  });
+  return { key, scale, viewport, outputScale };
+}
+
+function createPdfRenderCanvas(spec) {
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.floor(spec.viewport.width * spec.outputScale));
+  canvas.height = Math.max(1, Math.floor(spec.viewport.height * spec.outputScale));
+  return canvas;
+}
+
+function presentPdfPage(entry) {
+  const canvas = elements.pdfCanvas;
+  canvas.width = entry.canvas.width;
+  canvas.height = entry.canvas.height;
+  canvas.style.width = `${Math.floor(entry.viewport.width)}px`;
+  canvas.style.height = `${Math.floor(entry.viewport.height)}px`;
+  canvas.getContext("2d", { alpha: false }).drawImage(entry.canvas, 0, 0);
+  elements.pdfPageSurface.hidden = false;
+}
+
+async function renderPdfPageOffscreen(page, spec) {
+  const canvas = createPdfRenderCanvas(spec);
+  const renderTask = page.render({
+    canvasContext: canvas.getContext("2d", { alpha: false }),
+    viewport: spec.viewport,
+    transform: spec.outputScale === 1 ? null : [spec.outputScale, 0, 0, spec.outputScale, 0, 0]
+  });
+  state.pdfRenderTask = renderTask;
+  try {
+    await renderTask.promise;
+  } finally {
+    if (state.pdfRenderTask === renderTask) state.pdfRenderTask = null;
+  }
+  return state.pdfPageCache.set(spec.key, { canvas, viewport: spec.viewport, scale: spec.scale });
+}
+
+async function prefetchPdfPage(pageNumber, pdfDocument, loadToken) {
+  if (
+    !pageNumber || pageNumber > pdfDocument.numPages || loadToken !== state.pdfLoadToken ||
+    pdfDocument !== state.pdfDocument || state.pdfMainRendering
+  ) return null;
+  const page = await pdfDocument.getPage(pageNumber);
+  if (loadToken !== state.pdfLoadToken || pdfDocument !== state.pdfDocument || state.pdfMainRendering) return null;
+  const spec = createPdfPageRenderSpec(page);
+  const cached = state.pdfPageCache.get(spec.key);
+  if (cached) return cached;
+  const canvas = createPdfRenderCanvas(spec);
+  const renderTask = page.render({
+    canvasContext: canvas.getContext("2d", { alpha: false }),
+    viewport: spec.viewport,
+    transform: spec.outputScale === 1 ? null : [spec.outputScale, 0, 0, spec.outputScale, 0, 0]
+  });
+  const prefetch = { key: spec.key, pageNumber, task: renderTask, promise: null };
+  prefetch.promise = renderTask.promise.then(() => {
+    if (loadToken !== state.pdfLoadToken || pdfDocument !== state.pdfDocument) return null;
+    return state.pdfPageCache.set(spec.key, { canvas, viewport: spec.viewport, scale: spec.scale });
+  }).catch((error) => {
+    if (error?.name !== "RenderingCancelledException") throw error;
+    return null;
+  }).finally(() => {
+    if (state.pdfPagePrefetch === prefetch) state.pdfPagePrefetch = null;
+  });
+  state.pdfPagePrefetch = prefetch;
+  return prefetch.promise;
+}
+
+function scheduleAdjacentPdfPagePrefetch() {
+  cancelScheduledPdfPagePrefetch();
+  const pdfDocument = state.pdfDocument;
+  const loadToken = state.pdfLoadToken;
+  const pageNumber = state.pdfPage + 1;
+  if (!pdfDocument || pageNumber > pdfDocument.numPages) return;
+  const run = () => {
+    state.pdfPagePrefetchIdleId = null;
+    prefetchPdfPage(pageNumber, pdfDocument, loadToken).catch(() => {});
+  };
+  if ("requestIdleCallback" in window) {
+    state.pdfPagePrefetchIdleId = { type: "idle", id: window.requestIdleCallback(run, { timeout: 450 }) };
+  } else {
+    state.pdfPagePrefetchIdleId = { type: "timeout", id: window.setTimeout(run, 160) };
+  }
+}
+
 async function renderPdfPage({ fit = false } = {}) {
   if (!state.pdfDocument || !state.pdfPage) return;
   const renderToken = ++state.pdfPageRenderToken;
@@ -1639,41 +1761,32 @@ async function renderPdfPage({ fit = false } = {}) {
   const pageNumber = state.pdfPage;
   state.pdfMainRendering = true;
   state.pdfThumbnailQueue?.cancelActive();
+  cancelScheduledPdfPagePrefetch();
   if (state.pdfRenderTask) state.pdfRenderTask.cancel();
   try {
     const page = await pdfDocument.getPage(pageNumber);
     if (renderToken !== state.pdfPageRenderToken || pdfDocument !== state.pdfDocument) return;
-    if (fit || state.pdfAutoFit) state.pdfScale = fitPdfScale(page);
-    const viewport = page.getViewport({ scale: state.pdfScale, rotation: state.pdfRotation });
-    const outputScale = Math.min(window.devicePixelRatio || 1, 2);
-    const canvas = elements.pdfCanvas;
-    const context = canvas.getContext("2d", { alpha: false });
-    canvas.width = Math.floor(viewport.width * outputScale);
-    canvas.height = Math.floor(viewport.height * outputScale);
-    canvas.style.width = `${Math.floor(viewport.width)}px`;
-    canvas.style.height = `${Math.floor(viewport.height)}px`;
-    elements.pdfPageSurface.hidden = false;
-    const renderTask = page.render({
-      canvasContext: context,
-      viewport,
-      transform: outputScale === 1 ? null : [outputScale, 0, 0, outputScale, 0, 0]
-    });
-    state.pdfRenderTask = renderTask;
-    try {
-      await renderTask.promise;
-    } catch (error) {
-      if (error?.name === "RenderingCancelledException") return;
-      throw error;
-    } finally {
-      if (state.pdfRenderTask === renderTask) state.pdfRenderTask = null;
+    const spec = createPdfPageRenderSpec(page, { fit, commitScale: true });
+    cancelPdfPagePrefetch(spec.key);
+    let entry = state.pdfPageCache.get(spec.key);
+    if (!entry && state.pdfPagePrefetch?.key === spec.key) entry = await state.pdfPagePrefetch.promise;
+    if (!entry) {
+      try {
+        entry = await renderPdfPageOffscreen(page, spec);
+      } catch (error) {
+        if (error?.name === "RenderingCancelledException") return;
+        throw error;
+      }
     }
     if (renderToken !== state.pdfPageRenderToken || pdfDocument !== state.pdfDocument) return;
+    presentPdfPage(entry);
     paintActiveThumbnailFromMain(pageNumber);
     queueVisiblePdfThumbnails();
     renderOcrHighlights();
     elements.pdfStage.scrollTo({ top: 0, behavior: "auto" });
     updateActiveThumbnail();
     updatePdfControls();
+    scheduleAdjacentPdfPagePrefetch();
   } finally {
     if (renderToken === state.pdfPageRenderToken) state.pdfMainRendering = false;
   }
