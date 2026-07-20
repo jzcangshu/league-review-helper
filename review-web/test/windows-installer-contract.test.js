@@ -23,6 +23,8 @@ test("native launcher uses the packaged runtimes and opens a verified local serv
   assert.match(source, /CreateNoWindow\s*=\s*true/);
   assert.match(source, /\/api\/health/);
   assert.match(source, /UseShellExecute\s*=\s*true/);
+  assert.match(source, /launcher-["']?\s*\+\s*StableId\(appRoot\)/);
+  assert.match(source, /FileShare\.ReadWrite/);
 });
 
 test("offline build pins runtimes and preloads dependencies and OCR models", () => {
@@ -35,10 +37,24 @@ test("offline build pins runtimes and preloads dependencies and OCR models", () 
   assert.match(source, /pypdfium2/);
   assert.match(source, /PADDLE_PDX_CACHE_HOME/);
   assert.match(source, /ISCC\.exe/);
+  assert.match(source, /app-icon\.png/);
+  assert.match(source, /Trim-NodeRuntime/);
+  assert.match(source, /Remove-Item -LiteralPath \$target -Recurse -Force/);
 });
 
 test("offline package carries third-party redistribution notices", () => {
   const source = fs.readFileSync(path.join(packagingRoot, "THIRD_PARTY_NOTICES.md"), "utf8");
   for (const dependency of ["Node.js", "Python", "PaddleOCR", "ONNX Runtime", "pypdfium2", "PDFium"])
     assert.match(source, new RegExp(dependency.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+});
+
+test("offline installer has an end-to-end verification script", () => {
+  const source = fs.readFileSync(path.join(packagingRoot, "verify-offline-install.ps1"), "utf8");
+  assert.match(source, /LEAGUE_REVIEW_NO_BROWSER/);
+  assert.match(source, /HTTP_PROXY/);
+  assert.match(source, /api\/import\/analyze/);
+  assert.match(source, /api\/pdf-thumbnails/);
+  assert.match(source, /api\/ocr/);
+  assert.match(source, /Stop-InstalledProcesses/);
+  assert.match(source, /OrdinalIgnoreCase/);
 });

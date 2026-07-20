@@ -22,19 +22,23 @@
 
 ## 快速开始
 
-### 1. 下载
+### 1. 下载与安装
 
-从 [GitHub Releases（GitHub 发行版）](https://github.com/jzcangshu/league-review-helper/releases) 下载最新源码压缩包并解压。
+从 [GitHub Releases（GitHub 发行版）](https://github.com/jzcangshu/league-review-helper/releases) 下载名称包含 `Windows-x64-Offline-Setup.exe` 的最新离线安装包，双击后按提示安装。
+
+离线安装包适用于 64 位 Windows 10 1809 及更高版本、Windows 11。它已经内置 Node.js、Python、网页依赖和 OCR 模型，正常安装与首次启动均不需要开发环境或联网下载依赖，也不要求管理员权限。
 
 ### 2. 启动
 
-双击根目录中的：
+安装完成后，从开始菜单或桌面快捷方式打开“入团申请材料审核助手”。程序会在后台启动本地服务并自动打开浏览器，不显示命令行窗口。
+
+只有使用源码压缩包时，才需要双击根目录中的：
 
 ```text
 双击我启动审核软件.cmd
 ```
 
-首次启动会自动准备 Node.js（网页运行环境）、Python（OCR 运行环境）、网页依赖和 OCR 模型。通常不需要管理员权限，也不需要提前安装开发工具；首次准备需要联网并建议预留至少 1 GB 空间。
+源码版首次启动会自动准备 Node.js（网页运行环境）、Python（OCR 运行环境）、网页依赖和 OCR 模型，需要联网。普通用户优先使用离线安装包，并建议预留至少 1 GB 空间。
 
 启动成功后会自动打开：
 

@@ -55,7 +55,7 @@ internal static class LeagueReviewHelperLauncher
         string serverScript = Path.Combine(serverDir, "server.js");
         string logDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LeagueReviewHelper", "logs");
         Directory.CreateDirectory(logDir);
-        string logPath = Path.Combine(logDir, "launcher.log");
+        string logPath = Path.Combine(logDir, "launcher-" + StableId(appRoot) + ".log");
 
         foreach (string required in new[] { nodeExe, pythonExe, serverScript })
         {
@@ -83,7 +83,8 @@ internal static class LeagueReviewHelperLauncher
         process.StartInfo.EnvironmentVariables["REVIEW_OCR_RUNTIME_PYTHON"] = pythonExe;
         process.StartInfo.EnvironmentVariables["PYTHONUTF8"] = "1";
 
-        using (var log = new StreamWriter(logPath, true, new UTF8Encoding(false)))
+        using (var logStream = new FileStream(logPath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+        using (var log = new StreamWriter(logStream, new UTF8Encoding(false)))
         {
             log.AutoFlush = true;
             DataReceivedEventHandler capture = delegate(object sender, DataReceivedEventArgs args)

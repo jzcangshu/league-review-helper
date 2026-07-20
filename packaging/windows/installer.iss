@@ -39,13 +39,13 @@ VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyAppVersion}
 
 [Languages]
-Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "chinesesimp"; MessagesFile: "ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "其他选项："; Flags: unchecked
 
 [Files]
-Source: "{#PayloadDir}\*"; DestDir: "{app}"; Excludes: "注意事项.txt"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PayloadDir}\*"; DestDir: "{app}"; Excludes: "注意事项.txt,*.pyc,runtime\node\node_modules,runtime\node\npm,runtime\node\npm.cmd,runtime\node\npm.ps1,runtime\node\npx,runtime\node\npx.cmd,runtime\node\npx.ps1,runtime\node\corepack,runtime\node\corepack.cmd,runtime\node\install_tools.bat,runtime\node\nodevars.bat"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\注意事项.txt"; DestDir: "{app}"; Flags: onlyifdoesntexist uninsneveruninstall
 
 [Icons]

@@ -13,5 +13,6 @@ The offline Windows distribution includes third-party runtimes and libraries. Th
 - NumPy — BSD 3-Clause License. https://numpy.org/
 - Pillow — HPND License. https://python-pillow.org/
 - Inno Setup — used only to build the installer; its license is available at https://jrsoftware.org/isinfo.php
+- Inno Setup Simplified Chinese translation — maintained by Zhenghan Yang and distributed by the Inno Setup translation community; source notice is retained in `ChineseSimplified.isl`.
 
 Full license texts distributed by Node.js, Python packages, npm packages and the project itself are retained inside the installed application where supplied by their upstream packages.

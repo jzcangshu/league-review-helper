@@ -127,6 +127,29 @@ function Prepare-NodeDependencies {
   } finally { Pop-Location }
 }
 
+function Trim-NodeRuntime {
+  param([string]$NodeRoot)
+  foreach ($relativePath in @(
+    'node_modules',
+    'npm',
+    'npm.cmd',
+    'npm.ps1',
+    'npx',
+    'npx.cmd',
+    'npx.ps1',
+    'corepack',
+    'corepack.cmd',
+    'install_tools.bat',
+    'nodevars.bat'
+  )) {
+    $target = Join-Path $NodeRoot $relativePath
+    Assert-UnderRoot $PayloadRoot $target
+    if (Test-Path -LiteralPath $target) {
+      Remove-Item -LiteralPath $target -Recurse -Force
+    }
+  }
+}
+
 function Preload-OcrModels {
   param([string]$PythonExe)
   $modelRoot = Join-Path $PayloadRoot 'review-web\.ocr-models'
@@ -151,7 +174,7 @@ function Preload-OcrModels {
 function Build-NativeLauncher {
   param([string]$PythonExe)
   $iconPath = Join-Path $PayloadRoot 'app.ico'
-  & $PythonExe (Join-Path $PSScriptRoot 'make_icon.py') $iconPath
+  & $PythonExe (Join-Path $PSScriptRoot 'make_icon.py') (Join-Path $PSScriptRoot 'app-icon.png') $iconPath
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $iconPath)) { throw '应用图标生成失败。' }
 
   $cscCandidates = @(
@@ -170,7 +193,8 @@ function Build-NativeLauncher {
 function Find-InnoCompiler {
   $candidates = @(
     $env:ISCC_PATH,
-    "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
+    "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+    "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
     "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
   ) | Where-Object { $_ }
   return $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
@@ -183,16 +207,31 @@ Copy-ApplicationSource
 $nodeRoot = Prepare-NodeRuntime
 $pythonExe = Prepare-PythonRuntime
 Prepare-NodeDependencies $nodeRoot
+Trim-NodeRuntime $nodeRoot
 Preload-OcrModels $pythonExe
 Build-NativeLauncher $pythonExe
 
 $iscc = Find-InnoCompiler
 if (-not $iscc) { throw '未找到 Inno Setup 6 的 ISCC.exe。请先安装 Inno Setup 6。' }
-$env:LRH_VERSION = $Version
-$env:LRH_PAYLOAD_DIR = $PayloadRoot
-$env:LRH_OUTPUT_DIR = [IO.Path]::GetFullPath($OutputDirectory)
-& $iscc (Join-Path $PSScriptRoot 'installer.iss')
-if ($LASTEXITCODE -ne 0) { throw 'Windows 离线安装包编译失败。' }
+$compilerPayload = $PayloadRoot
+$substDrive = 'R:'
+$mappedDrive = $false
+try {
+  if ($PayloadRoot.Length -gt 80) {
+    if (Test-Path "$substDrive\") { throw "构建需要临时使用 $substDrive，但该盘符已被占用。" }
+    & subst.exe $substDrive $PayloadRoot
+    if ($LASTEXITCODE -ne 0) { throw '无法为长路径创建临时构建盘符。' }
+    $compilerPayload = "$substDrive\"
+    $mappedDrive = $true
+  }
+  $env:LRH_VERSION = $Version
+  $env:LRH_PAYLOAD_DIR = $compilerPayload
+  $env:LRH_OUTPUT_DIR = [IO.Path]::GetFullPath($OutputDirectory)
+  & $iscc (Join-Path $PSScriptRoot 'installer.iss')
+  if ($LASTEXITCODE -ne 0) { throw 'Windows 离线安装包编译失败。' }
+} finally {
+  if ($mappedDrive) { & subst.exe $substDrive /d }
+}
 
 $installer = Join-Path $OutputDirectory "LeagueReviewHelper-$Version-Windows-x64-Offline-Setup.exe"
 if (-not (Test-Path -LiteralPath $installer)) { throw '安装包输出文件不存在。' }
