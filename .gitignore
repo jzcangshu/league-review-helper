@@ -12,6 +12,12 @@
 !/examples/
 !/review-web/
 !/审核结果/
+!/packaging/
+!/packaging/windows/
+!/packaging/windows/**
+!/docs/
+!/docs/plans/
+!/docs/plans/**
 
 审核结果/*
 !审核结果/示例中学/
@@ -40,6 +46,9 @@ review-web/.runtime/
 __pycache__/
 *.py[cod]
 node_modules/
+packaging/work/
+packaging/.cache/
+dist/
 
 # OS/editor files
 .DS_Store

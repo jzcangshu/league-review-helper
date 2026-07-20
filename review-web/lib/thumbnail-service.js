@@ -7,6 +7,14 @@ const { promisify } = require("node:util");
 const execFileAsync = promisify(execFile);
 const inflight = new Map();
 
+function pythonRuntimeCandidates(options, env = process.env) {
+  const packagedPython = String(env.REVIEW_OCR_RUNTIME_PYTHON || "").trim();
+  return [
+    ...(packagedPython ? [path.resolve(packagedPython)] : []),
+    path.join(options.runtimeRoot, "Scripts", "python.exe")
+  ];
+}
+
 async function thumbnailCacheKey(pdfPath) {
   const stats = await fsp.stat(pdfPath);
   return crypto.createHash("sha1")
@@ -43,10 +51,15 @@ async function readCachedManifest(manifestPath, cacheDir) {
 }
 
 async function runRenderer(options, cacheDir) {
-  const pythonPath = path.join(options.runtimeRoot, "Scripts", "python.exe");
-  try {
-    await fsp.access(pythonPath);
-  } catch {
+  let pythonPath = null;
+  for (const candidate of pythonRuntimeCandidates(options)) {
+    try {
+      await fsp.access(candidate);
+      pythonPath = candidate;
+      break;
+    } catch {}
+  }
+  if (!pythonPath) {
     const error = new Error("本地缩略图运行环境尚未准备完成。");
     error.code = "THUMBNAIL_RUNTIME_UNAVAILABLE";
     throw error;
@@ -90,4 +103,4 @@ async function generatePdfThumbnails(options) {
   return inflight.get(key);
 }
 
-module.exports = { generatePdfThumbnails, normalizeManifest, thumbnailCacheKey };
+module.exports = { generatePdfThumbnails, normalizeManifest, pythonRuntimeCandidates, thumbnailCacheKey };

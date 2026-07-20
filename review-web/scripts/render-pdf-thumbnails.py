@@ -2,7 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
-import fitz
+import pypdfium2 as pdfium
 
 
 def main():
@@ -16,22 +16,26 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     pages = []
-    with fitz.open(args.pdf) as document:
-        for page_number, page in enumerate(document, start=1):
-            scale = min(args.max_width / page.rect.width, args.max_height / page.rect.height)
-            pixmap = page.get_pixmap(
-                matrix=fitz.Matrix(scale, scale),
-                colorspace=fitz.csRGB,
-                alpha=False,
-            )
+    document = pdfium.PdfDocument(args.pdf)
+    try:
+        for page_number in range(1, len(document) + 1):
+            page = document[page_number - 1]
+            width, height = page.get_size()
+            scale = min(args.max_width / width, args.max_height / height)
+            bitmap = page.render(scale=scale)
+            image = bitmap.to_pil().convert("RGB")
             file_name = f"{page_number}.png"
-            pixmap.save(str(output_dir / file_name))
+            image.save(output_dir / file_name, format="PNG")
             pages.append({
                 "page": page_number,
-                "width": pixmap.width,
-                "height": pixmap.height,
+                "width": image.width,
+                "height": image.height,
                 "fileName": file_name,
             })
+            bitmap.close()
+            page.close()
+    finally:
+        document.close()
     print(json.dumps({"pages": pages}, ensure_ascii=False))
 
 

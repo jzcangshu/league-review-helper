@@ -8,6 +8,11 @@ const execFileAsync = promisify(execFile);
 const inflight = new Map();
 let runtimePromise = null;
 
+function configuredRuntimePython(env = process.env) {
+  const value = String(env.REVIEW_OCR_RUNTIME_PYTHON || "").trim();
+  return value ? path.resolve(value) : null;
+}
+
 function parseOcrOutput(stdout) {
   const value = String(stdout || "").replace(/^\uFEFF/, "").trim();
   if (!value) throw new Error("OCR 没有返回识别结果。");
@@ -24,7 +29,7 @@ async function cacheKey(pdfPath) {
 async function checkRuntime(pythonPath) {
   await execFileAsync(pythonPath, [
     "-X", "utf8", "-c",
-    "from paddleocr import TextDetection, TextRecognition; import fitz, onnxruntime"
+    "from paddleocr import TextDetection, TextRecognition; import pypdfium2, onnxruntime"
   ], { windowsHide: true, timeout: 60000, maxBuffer: 4 * 1024 * 1024 });
 }
 
@@ -47,6 +52,11 @@ async function findBasePython() {
 async function ensureRuntime(runtimeRoot) {
   if (runtimePromise) return runtimePromise;
   runtimePromise = (async () => {
+    const packagedPython = configuredRuntimePython();
+    if (packagedPython) {
+      await checkRuntime(packagedPython);
+      return packagedPython;
+    }
     const pythonPath = path.join(runtimeRoot, "Scripts", "python.exe");
     try {
       await checkRuntime(pythonPath);
@@ -67,7 +77,7 @@ async function ensureRuntime(runtimeRoot) {
       "paddleocr==3.7.0",
       "paddlex[ocr-core]==3.7.2",
       "onnxruntime>=1.23",
-      "PyMuPDF>=1.24"
+      "pypdfium2>=4.30"
     ];
     const installArgs = ["-m", "pip", "install", ...requirements];
     try {
@@ -136,4 +146,4 @@ async function recognizePdf(options) {
   return inflight.get(key);
 }
 
-module.exports = { cacheKey, parseOcrOutput, recognizePdf };
+module.exports = { cacheKey, configuredRuntimePython, parseOcrOutput, recognizePdf };

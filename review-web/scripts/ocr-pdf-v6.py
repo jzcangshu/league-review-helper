@@ -9,8 +9,8 @@ os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
 
 with contextlib.redirect_stdout(sys.stderr):
     import cv2
-    import fitz
     import numpy as np
+    import pypdfium2 as pdfium
     from paddleocr import TextDetection, TextRecognition
 
 
@@ -52,12 +52,12 @@ def main() -> None:
         detector = TextDetection(model_name="PP-OCRv6_small_det", engine="onnxruntime")
         recognizer = TextRecognition(model_name="PP-OCRv6_tiny_rec", engine="onnxruntime")
 
-    document = fitz.open(args.pdf)
+    document = pdfium.PdfDocument(args.pdf)
     output_pages = []
-    for page_index in range(document.page_count):
-        page = document.load_page(page_index)
-        pixmap = page.get_pixmap(matrix=fitz.Matrix(args.scale, args.scale), alpha=False)
-        image = np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(pixmap.height, pixmap.width, pixmap.n)
+    for page_index in range(len(document)):
+        page = document[page_index]
+        bitmap = page.render(scale=args.scale)
+        image = np.asarray(bitmap.to_pil().convert("RGB"))
 
         with contextlib.redirect_stdout(sys.stderr):
             detection = list(detector.predict(input=image, batch_size=1))[0].json["res"]
@@ -94,11 +94,15 @@ def main() -> None:
 
         output_pages.append({
             "page": page_index + 1,
-            "width": pixmap.width,
-            "height": pixmap.height,
+            "width": int(image.shape[1]),
+            "height": int(image.shape[0]),
             "textAngle": None,
             "lines": lines,
         })
+        bitmap.close()
+        page.close()
+
+    document.close()
 
     print(json.dumps({
         "engine": "PP-OCRv6_small_det+PP-OCRv6_tiny_rec",
